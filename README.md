@@ -94,9 +94,9 @@ The application will be available at:
 
 ### Default Credentials
 
-- **Admin**: admin@insurance.com / admin123
-- **Agent**: agent1@insurance.com / agent123
-- **Client**: client1@insurance.com / client123
+- **Admin**: admin@insurance.com / admin
+- **Agent**: agent1@insurance.com / admin
+- **Client**: client1@insurance.com / admin
 
 ## Available Scripts
 

@@ -1,5 +1,5 @@
 /**
- * Script to generate bcrypt hash for admin123 and update database
+ * Script to generate bcrypt hash for admin and update database
  * Run: node scripts/update-admin-password.js
  */
 
@@ -8,11 +8,11 @@ const oracledb = require('oracledb');
 
 async function updateAdminPassword() {
     try {
-        // Generate hash for admin123
-        const password = 'admin123';
+        // Generate hash for admin
+        const password = 'admin';
         const hash = await bcrypt.hash(password, 10);
         
-        console.log('Generated hash for admin123:');
+        console.log('Generated hash for admin:');
         console.log(hash);
         console.log('\nSQL command to update database:');
         console.log(`UPDATE Users SET PasswordHash = '${hash}' WHERE Email = 'admin@insurance.com';`);

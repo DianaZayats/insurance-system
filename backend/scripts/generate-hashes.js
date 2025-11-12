@@ -7,9 +7,9 @@ const bcrypt = require('bcrypt');
 
 async function generateHashes() {
     const passwords = {
-        'admin123': 'admin@insurance.com',
-        'agent123': 'agent users',
-        'client123': 'client users'
+        'admin': 'admin@insurance.com',
+        'admin': 'agent users',
+        'admin': 'client users'
     };
 
     console.log('Generated password hashes:\n');
