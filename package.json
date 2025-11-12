@@ -1,0 +1,22 @@
+{
+  "name": "insurance-system",
+  "version": "1.0.0",
+  "description": "Insurance Agents Work Accounting Information System - Root",
+  "private": true,
+  "scripts": {
+    "backend:dev": "cd backend && npm run dev",
+    "backend:prod": "cd backend && npm start",
+    "frontend:dev": "cd frontend && npm run dev",
+    "frontend:prod": "cd frontend && npm run prod",
+    "dev": "concurrently \"npm run backend:dev\" \"npm run frontend:dev\"",
+    "prod": "concurrently \"npm run backend:prod\" \"npm run frontend:prod\"",
+    "db:up": "docker-compose up -d",
+    "db:down": "docker-compose down",
+    "db:logs": "docker-compose logs -f oracle-db",
+    "install:all": "npm install && cd backend && npm install && cd ../frontend && npm install"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}
+

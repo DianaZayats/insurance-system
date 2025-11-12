@@ -1,0 +1,37 @@
+-- Database initialization script
+-- This script creates the user and grants necessary permissions
+
+-- Create user (if not exists)
+BEGIN
+   EXECUTE IMMEDIATE 'CREATE USER INSURANCE_USER IDENTIFIED BY Insurance123';
+EXCEPTION
+   WHEN OTHERS THEN
+      IF SQLCODE = -1920 THEN
+         NULL; -- User already exists
+      ELSE
+         RAISE;
+      END IF;
+END;
+/
+
+-- Grant privileges
+GRANT CONNECT, RESOURCE TO INSURANCE_USER;
+GRANT UNLIMITED TABLESPACE TO INSURANCE_USER;
+GRANT CREATE SESSION TO INSURANCE_USER;
+GRANT CREATE TABLE TO INSURANCE_USER;
+GRANT CREATE SEQUENCE TO INSURANCE_USER;
+GRANT CREATE PROCEDURE TO INSURANCE_USER;
+GRANT CREATE TRIGGER TO INSURANCE_USER;
+GRANT CREATE FUNCTION TO INSURANCE_USER;
+
+-- Switch to the user schema
+ALTER SESSION SET CURRENT_SCHEMA = INSURANCE_USER;
+
+-- Run schema
+@@schema.sql
+
+-- Run seed data
+@@seed.sql
+
+COMMIT;
+
