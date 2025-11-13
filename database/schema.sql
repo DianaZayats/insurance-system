@@ -1,7 +1,3 @@
--- Insurance Agents Work Accounting Information System
--- Oracle Database Schema
-
--- Drop existing objects (for clean setup)
 BEGIN
    FOR cur_rec IN (SELECT object_name, object_type FROM user_objects WHERE object_type IN ('TABLE','VIEW','PACKAGE','SEQUENCE','PROCEDURE','FUNCTION','TRIGGER') AND object_name NOT LIKE 'BIN$%')
    LOOP
@@ -35,7 +31,7 @@ BEGIN
 END;
 /
 
--- Sequences
+-- Послідовності
 CREATE SEQUENCE seq_branch_id START WITH 1 INCREMENT BY 1;
 CREATE SEQUENCE seq_client_id START WITH 1 INCREMENT BY 1;
 CREATE SEQUENCE seq_agent_id START WITH 1 INCREMENT BY 1;
@@ -45,7 +41,7 @@ CREATE SEQUENCE seq_case_id START WITH 1 INCREMENT BY 1;
 CREATE SEQUENCE seq_user_id START WITH 1 INCREMENT BY 1;
 CREATE SEQUENCE seq_audit_log_id START WITH 1 INCREMENT BY 1;
 
--- Tables
+-- Таблиці
 CREATE TABLE Branch (
     BranchID INTEGER PRIMARY KEY,
     Name VARCHAR2(100) NOT NULL UNIQUE
@@ -134,7 +130,7 @@ CREATE TABLE Audit_Log (
     CONSTRAINT fk_audit_user FOREIGN KEY (ChangedBy) REFERENCES Users(UserID)
 );
 
--- Indexes for performance
+-- Індекси
 CREATE INDEX idx_contract_client ON Contract(ClientID);
 CREATE INDEX idx_contract_agent ON Contract(AgentID);
 CREATE INDEX idx_contract_status ON Contract(Status);
@@ -144,7 +140,7 @@ CREATE INDEX idx_case_date ON InsuranceCase(CaseDate);
 CREATE INDEX idx_audit_entity ON Audit_Log(Entity, EntityID);
 CREATE INDEX idx_audit_changed_at ON Audit_Log(ChangedAt);
 
--- Function to calculate contribution amount
+-- Функція розрахунку страхового внеску
 CREATE OR REPLACE FUNCTION CalculateContribution(
     p_insurance_amount IN NUMBER,
     p_base_rate IN NUMBER
@@ -154,7 +150,7 @@ BEGIN
 END;
 /
 
--- Function to calculate accrued payment
+-- Функція розрахунку нарахованої виплати
 CREATE OR REPLACE FUNCTION CalculateAccruedPayment(
     p_insurance_amount IN NUMBER,
     p_damage_level IN NUMBER,
@@ -163,7 +159,7 @@ CREATE OR REPLACE FUNCTION CalculateAccruedPayment(
     v_payment NUMBER;
 BEGIN
     v_payment := ROUND(p_insurance_amount * p_damage_level * p_payout_coeff, 2);
-    -- Cap by insurance amount
+    -- Обмеження виплати сумою страхування
     IF v_payment > p_insurance_amount THEN
         v_payment := p_insurance_amount;
     END IF;
@@ -171,7 +167,7 @@ BEGIN
 END;
 /
 
--- Function to check if client can create contract (ban rule)
+-- Функція перевірки можливості створити договір (правило блокування)
 CREATE OR REPLACE FUNCTION CanCreateContract(
     p_client_id IN INTEGER
 ) RETURN NUMBER IS
@@ -188,18 +184,18 @@ BEGIN
     WHERE ClientID = p_client_id AND Status != 'Draft';
     
     IF v_contract_count = 0 THEN
-        RETURN 1; -- Can create if no contracts
+        RETURN 1; -- Можна створити, якщо немає договорів
     END IF;
     
     IF v_case_count > (v_contract_count * 0.5) THEN
-        RETURN 0; -- Cannot create
+        RETURN 0; -- Заборонено створювати
     END IF;
     
-    RETURN 1; -- Can create
+    RETURN 1; -- Можна створити
 END;
 /
 
--- Function to calculate contract uplift
+-- Функція розрахунку підвищення (uplift)
 CREATE OR REPLACE FUNCTION CalculateUplift(
     p_client_id IN INTEGER
 ) RETURN NUMBER IS
@@ -207,17 +203,17 @@ CREATE OR REPLACE FUNCTION CalculateUplift(
     v_total_count INTEGER;
     v_uplift NUMBER := 0;
 BEGIN
-    -- Count active contracts
+    -- Підрахунок активних договорів
     SELECT COUNT(*) INTO v_active_count
     FROM Contract
     WHERE ClientID = p_client_id AND Status = 'Active';
     
-    -- Count total non-Draft contracts
+    -- Підрахунок усіх договорів (не Draft)
     SELECT COUNT(*) INTO v_total_count
     FROM Contract
     WHERE ClientID = p_client_id AND Status != 'Draft';
     
-    -- Apply uplift rules
+    -- Правила підвищення
     IF (v_active_count > 4 OR v_total_count >= 20) THEN
         v_uplift := 0.10; -- 10%
     ELSIF (v_active_count > 2 OR v_total_count >= 10) THEN
@@ -228,7 +224,7 @@ BEGIN
 END;
 /
 
--- Trigger: Auto-calculate AccruedPayment and AccruedDate on InsuranceCase
+-- Тригер: автоматичний розрахунок AccruedPayment та AccruedDate у InsuranceCase
 CREATE OR REPLACE TRIGGER trg_calculate_case_payment
 BEFORE INSERT OR UPDATE OF ContractID, DamageLevel ON InsuranceCase
 FOR EACH ROW
@@ -249,7 +245,7 @@ BEGIN
 END;
 /
 
--- Trigger: Auto-calculate ContributionAmount on Contract
+-- Тригер: автоматичний розрахунок ContributionAmount у Contract
 CREATE OR REPLACE TRIGGER trg_calculate_contribution
 BEFORE INSERT OR UPDATE OF InsuranceAmount, InsuranceTypeID ON Contract
 FOR EACH ROW
@@ -266,7 +262,7 @@ BEGIN
 END;
 /
 
--- Trigger: Apply uplift and validate ban rule on Contract creation
+-- Тригер: застосування uplift та перевірка правила блокування при створенні договору
 CREATE OR REPLACE TRIGGER trg_contract_uplift_and_validation
 BEFORE INSERT ON Contract
 FOR EACH ROW
@@ -275,13 +271,13 @@ DECLARE
     v_can_create NUMBER;
     v_agent_percent_default NUMBER;
 BEGIN
-    -- Check ban rule
+    -- Перевірка правила блокування
     v_can_create := CanCreateContract(:NEW.ClientID);
     IF v_can_create = 0 THEN
         RAISE_APPLICATION_ERROR(-20001, 'Cannot create contract: client has too many insurance cases relative to contracts');
     END IF;
     
-    -- Apply uplift if not Draft
+    -- Застосування uplift, якщо договір не Draft
     IF :NEW.Status != 'Draft' THEN
         v_uplift := CalculateUplift(:NEW.ClientID);
         IF v_uplift > 0 THEN
@@ -289,7 +285,7 @@ BEGIN
         END IF;
     END IF;
     
-    -- Set default AgentPercent if not provided
+    -- Встановлення AgentPercent за замовчуванням, якщо не вказано
     IF :NEW.AgentPercent IS NULL THEN
         SELECT AgentPercentDefault INTO v_agent_percent_default
         FROM InsuranceType
@@ -299,17 +295,17 @@ BEGIN
 END;
 /
 
--- Trigger: Recalculate contribution after uplift
+-- Тригер: перерахунок внеску після застосування uplift
 CREATE OR REPLACE TRIGGER trg_recalculate_contribution_after_uplift
 AFTER INSERT OR UPDATE OF InsuranceAmount, InsuranceTypeID ON Contract
 FOR EACH ROW
 BEGIN
-    -- Contribution is recalculated by trg_calculate_contribution
+    -- Contribution перераховує інший тригер
     NULL;
 END;
 /
 
--- Trigger: Audit log for Contract changes
+-- Тригер: аудит змін Contract
 CREATE OR REPLACE TRIGGER trg_audit_contract
 AFTER INSERT OR UPDATE OR DELETE ON Contract
 FOR EACH ROW
@@ -333,7 +329,7 @@ BEGIN
 END;
 /
 
--- Trigger: Audit log for InsuranceCase changes
+-- Тригер: аудит змін InsuranceCase
 CREATE OR REPLACE TRIGGER trg_audit_case
 AFTER INSERT OR UPDATE OR DELETE ON InsuranceCase
 FOR EACH ROW
