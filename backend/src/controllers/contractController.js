@@ -54,7 +54,7 @@ const getAll = async (req, res, next) => {
             }
         }
 
-        sql += ` ORDER BY StartDate DESC OFFSET :offset ROWS FETCH NEXT :limit ROWS ONLY`;
+        sql += ` ORDER BY ContractID DESC OFFSET :offset ROWS FETCH NEXT :limit ROWS ONLY`;
 
         const result = await db.execute(sql, { ...binds, offset, limit });
 
@@ -165,7 +165,7 @@ const create = async (req, res, next) => {
                 agentPercent: agentPercent || null,
                 status: status || 'Draft'
             },
-            { autoCommit: true }
+            { autoCommit: true, auditUserId: req.user.USERID }
         );
 
         // Get the created contract (with calculated fields)
@@ -214,7 +214,7 @@ const update = async (req, res, next) => {
             });
         }
 
-        await db.execute(`UPDATE Contract SET ${updates.join(', ')} WHERE ContractID = :id`, binds, { autoCommit: true });
+        await db.execute(`UPDATE Contract SET ${updates.join(', ')} WHERE ContractID = :id`, binds, { autoCommit: true, auditUserId: req.user.USERID });
 
         const updated = await db.execute(
             `SELECT ContractID, ClientID, AgentID, InsuranceTypeID, StartDate, EndDate,
@@ -255,7 +255,7 @@ const updateStatus = async (req, res, next) => {
         const result = await db.execute(
             `UPDATE Contract SET Status = :status WHERE ContractID = :id`,
             { status, id: parseInt(id) },
-            { autoCommit: true }
+            { autoCommit: true, auditUserId: req.user.USERID }
         );
 
         if (result.rowsAffected === 0) {
@@ -284,7 +284,7 @@ const remove = async (req, res, next) => {
         const result = await db.execute(
             `DELETE FROM Contract WHERE ContractID = :id`,
             { id: parseInt(id) },
-            { autoCommit: true }
+            { autoCommit: true, auditUserId: req.user.USERID }
         );
 
         if (result.rowsAffected === 0) {

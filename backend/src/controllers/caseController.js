@@ -46,7 +46,7 @@ const getAll = async (req, res, next) => {
             }
         }
 
-        sql += ` ORDER BY ic.CaseDate DESC OFFSET :offset ROWS FETCH NEXT :limit ROWS ONLY`;
+        sql += ` ORDER BY ic.CaseID DESC OFFSET :offset ROWS FETCH NEXT :limit ROWS ONLY`;
 
         const result = await db.execute(sql, { ...binds, offset, limit });
 
@@ -155,7 +155,7 @@ const create = async (req, res, next) => {
                 damageLevel,
                 paymentDate: paymentDate || null
             },
-            { autoCommit: true }
+            { autoCommit: true, auditUserId: req.user.USERID }
         );
 
         // Get the created case (with calculated fields)
@@ -206,7 +206,7 @@ const update = async (req, res, next) => {
             });
         }
 
-        await db.execute(`UPDATE InsuranceCase SET ${updates.join(', ')} WHERE CaseID = :id`, binds, { autoCommit: true });
+        await db.execute(`UPDATE InsuranceCase SET ${updates.join(', ')} WHERE CaseID = :id`, binds, { autoCommit: true, auditUserId: req.user.USERID });
 
         const updated = await db.execute(
             `SELECT CaseID, ContractID, CaseDate, ActNumber, DamageLevel,
@@ -243,7 +243,7 @@ const remove = async (req, res, next) => {
         const result = await db.execute(
             `DELETE FROM InsuranceCase WHERE CaseID = :id`,
             { id: parseInt(id) },
-            { autoCommit: true }
+            { autoCommit: true, auditUserId: req.user.USERID }
         );
 
         if (result.rowsAffected === 0) {

@@ -16,7 +16,7 @@ const getAll = async (req, res, next) => {
             binds.name = `%${name}%`;
         }
 
-        sql += ` ORDER BY Name OFFSET :offset ROWS FETCH NEXT :limit ROWS ONLY`;
+        sql += ` ORDER BY InsuranceTypeID DESC OFFSET :offset ROWS FETCH NEXT :limit ROWS ONLY`;
 
         const result = await db.execute(sql, { ...binds, offset, limit });
 
@@ -83,7 +83,7 @@ const create = async (req, res, next) => {
                 payoutCoeff,
                 agentPercentDefault
             },
-            { autoCommit: true }
+            { autoCommit: true, auditUserId: req.user.USERID }
         );
 
         const newType = await db.execute(
@@ -124,7 +124,7 @@ const update = async (req, res, next) => {
             });
         }
 
-        await db.execute(`UPDATE InsuranceType SET ${updates.join(', ')} WHERE InsuranceTypeID = :id`, binds, { autoCommit: true });
+        await db.execute(`UPDATE InsuranceType SET ${updates.join(', ')} WHERE InsuranceTypeID = :id`, binds, { autoCommit: true, auditUserId: req.user.USERID });
 
         const updated = await db.execute(
             `SELECT InsuranceTypeID, Name, Description, BaseRate, PayoutCoeff, AgentPercentDefault
@@ -158,7 +158,7 @@ const remove = async (req, res, next) => {
         const result = await db.execute(
             `DELETE FROM InsuranceType WHERE InsuranceTypeID = :id`,
             { id: parseInt(id) },
-            { autoCommit: true }
+            { autoCommit: true, auditUserId: req.user.USERID }
         );
 
         if (result.rowsAffected === 0) {

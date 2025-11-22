@@ -128,6 +128,8 @@ export default {
           await this.updateClient({ id: this.editingClient.clientId, ...this.form })
         } else {
           await this.createClient(this.form)
+          // Reset to page 1 to show newly created client
+          this.$store.commit('clients/SET_PAGINATION', { ...this.pagination, page: 1 })
         }
         this.closeModal()
         await this.fetchClients()

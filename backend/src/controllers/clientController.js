@@ -37,7 +37,7 @@ const getAll = async (req, res, next) => {
             binds.userEmail = req.user.EMAIL;
         }
 
-        sql += ` ORDER BY LastName, FirstName OFFSET :offset ROWS FETCH NEXT :limit ROWS ONLY`;
+        sql += ` ORDER BY ClientID DESC OFFSET :offset ROWS FETCH NEXT :limit ROWS ONLY`;
 
         const result = await db.execute(sql, {
             ...binds,
@@ -145,7 +145,7 @@ const create = async (req, res, next) => {
                 phone: phone || null,
                 email: email || null
             },
-            { autoCommit: true }
+            { autoCommit: true, auditUserId: req.user.USERID }
         );
 
         // Get the created client
@@ -218,7 +218,7 @@ const update = async (req, res, next) => {
         }
 
         const sql = `UPDATE Client SET ${updates.join(', ')} WHERE ClientID = :id`;
-        const result = await db.execute(sql, binds, { autoCommit: true });
+        const result = await db.execute(sql, binds, { autoCommit: true, auditUserId: req.user.USERID });
 
         if (result.rowsAffected === 0) {
             return res.status(404).json({
@@ -259,7 +259,7 @@ const remove = async (req, res, next) => {
         const result = await db.execute(
             `DELETE FROM Client WHERE ClientID = :id`,
             { id: parseInt(id) },
-            { autoCommit: true }
+            { autoCommit: true, auditUserId: req.user.USERID }
         );
 
         if (result.rowsAffected === 0) {

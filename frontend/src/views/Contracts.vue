@@ -2,7 +2,7 @@
   <div class="contracts-view">
     <div class="header">
       <h1>Contracts</h1>
-      <button @click="showModal = true" class="btn-primary">Add Contract</button>
+      <button @click="openAddModal" class="btn-primary">Add Contract</button>
     </div>
     
     <div class="filters">
@@ -61,16 +61,31 @@
         <h2>{{ editingContract ? 'Edit' : 'Add' }} Contract</h2>
         <form @submit.prevent="saveContract">
           <div class="form-group">
-            <label>Client ID *</label>
-            <input v-model.number="form.clientId" type="number" required />
+            <label>Client *</label>
+            <select v-model.number="form.clientId" required>
+              <option :value="null">Select a client</option>
+              <option v-for="client in clients" :key="client.clientId" :value="client.clientId">
+                {{ client.clientId }} - {{ client.lastName }}, {{ client.firstName }} {{ client.middleName || '' }}
+              </option>
+            </select>
           </div>
           <div class="form-group">
-            <label>Agent ID *</label>
-            <input v-model.number="form.agentId" type="number" required />
+            <label>Agent *</label>
+            <select v-model.number="form.agentId" required>
+              <option :value="null">Select an agent</option>
+              <option v-for="agent in agents" :key="agent.agentId" :value="agent.agentId">
+                {{ agent.agentId }} - {{ agent.fullName }}
+              </option>
+            </select>
           </div>
           <div class="form-group">
-            <label>Insurance Type ID *</label>
-            <input v-model.number="form.insuranceTypeId" type="number" required />
+            <label>Insurance Type *</label>
+            <select v-model.number="form.insuranceTypeId" required>
+              <option :value="null">Select an insurance type</option>
+              <option v-for="type in insuranceTypes" :key="type.insuranceTypeId" :value="type.insuranceTypeId">
+                {{ type.insuranceTypeId }} - {{ type.name }}
+              </option>
+            </select>
           </div>
           <div class="form-group">
             <label>Start Date *</label>
@@ -130,8 +145,20 @@ export default {
   },
   computed: {
     ...mapGetters('contracts', ['allContracts']),
+    ...mapGetters('clients', ['allClients']),
+    ...mapGetters('agents', ['allAgents']),
+    ...mapGetters('insuranceTypes', ['allInsuranceTypes']),
     contracts() {
       return this.allContracts
+    },
+    clients() {
+      return this.allClients || []
+    },
+    agents() {
+      return this.allAgents
+    },
+    insuranceTypes() {
+      return this.allInsuranceTypes
     },
     pagination() {
       return this.$store.state.contracts.pagination
@@ -140,9 +167,45 @@ export default {
   async mounted() {
     await this.fetchStatusOptions()
     await this.fetchContracts()
+    // Fetch all items for dropdowns (with high limit)
+    await this.loadDropdownData()
   },
   methods: {
     ...mapActions('contracts', ['fetchContracts', 'createContract', 'updateContract']),
+    ...mapActions('clients', ['fetchClients']),
+    ...mapActions('agents', ['fetchAgents']),
+    ...mapActions('insuranceTypes', ['fetchInsuranceTypes']),
+    async loadDropdownData() {
+      try {
+        // Use limit 100 (max allowed by validation) and fetch first page
+        const clientsResponse = await this.fetchClients({ limit: 100, page: 1 })
+        console.log('Clients loaded:', clientsResponse?.data?.length || 0, 'clients')
+      } catch (error) {
+        console.error('Error fetching clients:', error)
+        // Only show alert for critical errors, not validation errors
+        if (error.error?.code !== 'VALIDATION') {
+          alert('Failed to load clients: ' + (error.error?.message || 'Unknown error'))
+        }
+      }
+      try {
+        const agentsResponse = await this.fetchAgents({ limit: 100, page: 1 })
+        console.log('Agents loaded:', agentsResponse?.data?.length || 0, 'agents')
+      } catch (error) {
+        console.error('Error fetching agents:', error)
+        if (error.error?.code !== 'VALIDATION') {
+          alert('Failed to load agents: ' + (error.error?.message || 'Unknown error'))
+        }
+      }
+      try {
+        const typesResponse = await this.fetchInsuranceTypes({ limit: 100, page: 1 })
+        console.log('Insurance types loaded:', typesResponse?.data?.length || 0, 'types')
+      } catch (error) {
+        console.error('Error fetching insurance types:', error)
+        if (error.error?.code !== 'VALIDATION') {
+          alert('Failed to load insurance types: ' + (error.error?.message || 'Unknown error'))
+        }
+      }
+    },
     async fetchStatusOptions() {
       const response = await axios.get('/status-options')
       this.statusOptions = response.data
@@ -152,12 +215,34 @@ export default {
       Object.keys(params).forEach(key => !params[key] && delete params[key])
       await this.$store.dispatch('contracts/fetchContracts', params)
     },
-    editContract(contract) {
+    async editContract(contract) {
       this.editingContract = contract
       this.form = {
         ...contract,
         startDate: contract.startDate?.split('T')[0],
         endDate: contract.endDate?.split('T')[0]
+      }
+      // Ensure dropdowns are loaded before opening modal
+      if (this.clients.length === 0) {
+        try {
+          await this.fetchClients({ limit: 100, page: 1 })
+        } catch (error) {
+          console.error('Error fetching clients in editContract:', error)
+        }
+      }
+      if (this.agents.length === 0) {
+        try {
+          await this.fetchAgents({ limit: 100, page: 1 })
+        } catch (error) {
+          console.error('Error fetching agents in editContract:', error)
+        }
+      }
+      if (this.insuranceTypes.length === 0) {
+        try {
+          await this.fetchInsuranceTypes({ limit: 100, page: 1 })
+        } catch (error) {
+          console.error('Error fetching insurance types in editContract:', error)
+        }
       }
       this.showModal = true
     },
@@ -167,6 +252,8 @@ export default {
           await this.updateContract({ id: this.editingContract.contractId, ...this.form })
         } else {
           await this.createContract(this.form)
+          // Reset to page 1 to show newly created contract
+          this.$store.commit('contracts/SET_PAGINATION', { ...this.pagination, page: 1 })
         }
         this.closeModal()
         await this.fetchContracts()
@@ -187,6 +274,44 @@ export default {
           alert(error.error?.message || 'Error updating status')
         }
       }
+    },
+    async openAddModal() {
+      // Ensure dropdowns are loaded before opening modal
+      if (this.clients.length === 0) {
+        try {
+          const response = await this.fetchClients({ limit: 100, page: 1 })
+          console.log('Clients fetched in openAddModal:', response?.data?.length || 0)
+          console.log('Store clients after fetch:', this.$store.state.clients.clients?.length || 0)
+        } catch (error) {
+          console.error('Error fetching clients in openAddModal:', error)
+          if (error.error?.code !== 'VALIDATION') {
+            alert('Failed to load clients: ' + (error.error?.message || error.message || 'Unknown error'))
+          }
+        }
+      }
+      if (this.agents.length === 0) {
+        try {
+          await this.fetchAgents({ limit: 100, page: 1 })
+        } catch (error) {
+          console.error('Error fetching agents:', error)
+          if (error.error?.code !== 'VALIDATION') {
+            alert('Failed to load agents: ' + (error.error?.message || 'Unknown error'))
+          }
+        }
+      }
+      if (this.insuranceTypes.length === 0) {
+        try {
+          await this.fetchInsuranceTypes({ limit: 100, page: 1 })
+        } catch (error) {
+          console.error('Error fetching insurance types:', error)
+          if (error.error?.code !== 'VALIDATION') {
+            alert('Failed to load insurance types: ' + (error.error?.message || 'Unknown error'))
+          }
+        }
+      }
+      // Debug: log current state
+      console.log('Opening modal - Clients:', this.clients.length, 'Agents:', this.agents.length, 'Types:', this.insuranceTypes.length)
+      this.showModal = true
     },
     closeModal() {
       this.showModal = false

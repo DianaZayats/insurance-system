@@ -9,6 +9,7 @@ const insuranceTypeRoutes = require('./insuranceTypes');
 const contractRoutes = require('./contracts');
 const caseRoutes = require('./cases');
 const reportRoutes = require('./reports');
+const auditRoutes = require('./auditRoutes');
 
 router.use('/auth', authRoutes);
 router.use('/branches', branchRoutes);
@@ -18,6 +19,7 @@ router.use('/insurance-types', insuranceTypeRoutes);
 router.use('/contracts', contractRoutes);
 router.use('/cases', caseRoutes);
 router.use('/reports', reportRoutes);
+router.use('/audit-logs', auditRoutes);
 
 // Status options endpoint
 router.get('/status-options', (req, res) => {

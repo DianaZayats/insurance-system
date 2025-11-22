@@ -18,7 +18,7 @@ const getAll = async (req, res, next) => {
             binds.query = `%${query}%`;
         }
 
-        sql += ` ORDER BY Name OFFSET :offset ROWS FETCH NEXT :limit ROWS ONLY`;
+        sql += ` ORDER BY BranchID DESC OFFSET :offset ROWS FETCH NEXT :limit ROWS ONLY`;
 
         const result = await db.execute(sql, {
             ...binds,
@@ -95,7 +95,7 @@ const create = async (req, res, next) => {
              VALUES (seq_branch_id.NEXTVAL, :name)
              RETURNING BranchID INTO :branchId`,
             { name },
-            { autoCommit: true }
+            { autoCommit: true, auditUserId: req.user.USERID }
         );
 
         // Get the created branch
@@ -124,7 +124,7 @@ const update = async (req, res, next) => {
         const result = await db.execute(
             `UPDATE Branch SET Name = :name WHERE BranchID = :id`,
             { name, id: parseInt(id) },
-            { autoCommit: true }
+            { autoCommit: true, auditUserId: req.user.USERID }
         );
 
         if (result.rowsAffected === 0) {
@@ -161,7 +161,7 @@ const remove = async (req, res, next) => {
         const result = await db.execute(
             `DELETE FROM Branch WHERE BranchID = :id`,
             { id: parseInt(id) },
-            { autoCommit: true }
+            { autoCommit: true, auditUserId: req.user.USERID }
         );
 
         if (result.rowsAffected === 0) {

@@ -54,7 +54,7 @@ const routes = [
     path: '/audit-log',
     name: 'AuditLog',
     component: () => import('../views/AuditLog.vue'),
-    meta: { requiresAuth: true }
+    meta: { requiresAuth: true, requiresAdmin: true }
   },
   {
     path: '/',
@@ -69,9 +69,12 @@ const router = createRouter({
 
 router.beforeEach((to, from, next) => {
   const isAuthenticated = store.getters['auth/isAuthenticated']
+  const userRole = store.getters['auth/userRole']
   
   if (to.meta.requiresAuth && !isAuthenticated) {
     next('/login')
+  } else if (to.meta.requiresAdmin && userRole !== 'Admin') {
+    next('/dashboard')
   } else if (to.path === '/login' && isAuthenticated) {
     next('/dashboard')
   } else {

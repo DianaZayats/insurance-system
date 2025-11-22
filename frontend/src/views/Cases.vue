@@ -2,7 +2,7 @@
   <div class="cases-view">
     <div class="header">
       <h1>Insurance Cases</h1>
-      <button @click="showModal = true" class="btn-primary">Add Case</button>
+      <button @click="openAddModal" class="btn-primary">Add Case</button>
     </div>
 
     <table class="data-table">
@@ -46,8 +46,13 @@
         <h2>{{ editingCase ? 'Edit' : 'Add' }} Insurance Case</h2>
         <form @submit.prevent="saveCase">
           <div class="form-group">
-            <label>Contract ID *</label>
-            <input v-model.number="form.contractId" type="number" required />
+            <label>Contract *</label>
+            <select v-model.number="form.contractId" required>
+              <option :value="null">Select a contract</option>
+              <option v-for="contract in contracts" :key="contract.contractId" :value="contract.contractId">
+                {{ contract.contractId }}
+              </option>
+            </select>
           </div>
           <div class="form-group">
             <label>Case Date *</label>
@@ -95,8 +100,12 @@ export default {
   },
   computed: {
     ...mapGetters('cases', ['allCases']),
+    ...mapGetters('contracts', ['allContracts']),
     cases() {
       return this.allCases
+    },
+    contracts() {
+      return this.allContracts || []
     },
     pagination() {
       return this.$store.state.cases.pagination
@@ -107,18 +116,41 @@ export default {
   },
   methods: {
     ...mapActions('cases', ['fetchCases', 'createCase', 'updateCase']),
+    ...mapActions('contracts', ['fetchContracts']),
     async fetchCases() {
       await this.$store.dispatch('cases/fetchCases', {
         page: this.pagination.page,
         limit: this.pagination.limit
       })
     },
-    editCase(caseItem) {
+    async openAddModal() {
+      // Ensure contracts are loaded before opening modal
+      if (this.contracts.length === 0) {
+        try {
+          await this.fetchContracts({ limit: 100, page: 1 })
+        } catch (error) {
+          console.error('Error fetching contracts:', error)
+          if (error.error?.code !== 'VALIDATION') {
+            alert('Failed to load contracts: ' + (error.error?.message || 'Unknown error'))
+          }
+        }
+      }
+      this.showModal = true
+    },
+    async editCase(caseItem) {
       this.editingCase = caseItem
       this.form = {
         ...caseItem,
         caseDate: caseItem.caseDate?.split('T')[0],
         paymentDate: caseItem.paymentDate?.split('T')[0] || ''
+      }
+      // Ensure contracts are loaded before opening modal
+      if (this.contracts.length === 0) {
+        try {
+          await this.fetchContracts({ limit: 100, page: 1 })
+        } catch (error) {
+          console.error('Error fetching contracts:', error)
+        }
       }
       this.showModal = true
     },
@@ -128,6 +160,8 @@ export default {
           await this.updateCase({ id: this.editingCase.caseId, ...this.form })
         } else {
           await this.createCase(this.form)
+          // Reset to page 1 to show newly created case
+          this.$store.commit('cases/SET_PAGINATION', { ...this.pagination, page: 1 })
         }
         this.closeModal()
         await this.fetchCases()
@@ -245,18 +279,25 @@ export default {
   font-size: 0.9rem;
 }
 
-.form-group input {
+.form-group input,
+.form-group select {
   width: 100%;
   padding: 0.5rem;
   border: 1px solid #3e3e42;
   border-radius: 4px;
   background-color: #3c3c3c;
   color: #cccccc;
+  font-family: inherit;
 }
 
-.form-group input:focus {
+.form-group input:focus,
+.form-group select:focus {
   outline: none;
   border-color: #007acc;
+}
+
+.form-group select {
+  cursor: pointer;
 }
 
 .form-actions {

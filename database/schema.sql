@@ -107,7 +107,8 @@ CREATE TABLE InsuranceCase (
     AccruedPayment NUMBER(12,2),
     AccruedDate DATE,
     PaymentDate DATE,
-    CONSTRAINT fk_case_contract FOREIGN KEY (ContractID) REFERENCES Contract(ContractID)
+    CONSTRAINT fk_case_contract FOREIGN KEY (ContractID) REFERENCES Contract(ContractID),
+    CONSTRAINT chk_accrued_payment CHECK (AccruedPayment >= 0)
 );
 
 CREATE TABLE Users (
@@ -130,17 +131,30 @@ CREATE TABLE Audit_Log (
     CONSTRAINT fk_audit_user FOREIGN KEY (ChangedBy) REFERENCES Users(UserID)
 );
 
--- Індекси
-CREATE INDEX idx_contract_client ON Contract(ClientID);
-CREATE INDEX idx_contract_agent ON Contract(AgentID);
+-- Індекси для зовнішніх ключів та часто використовуваних полів
+-- Contract table indexes
+CREATE INDEX idx_contract_clientid ON Contract(ClientID);
+CREATE INDEX idx_contract_agentid ON Contract(AgentID);
+CREATE INDEX idx_contract_insurancetypeid ON Contract(InsuranceTypeID);
 CREATE INDEX idx_contract_status ON Contract(Status);
 CREATE INDEX idx_contract_dates ON Contract(StartDate, EndDate);
-CREATE INDEX idx_case_contract ON InsuranceCase(ContractID);
+
+-- InsuranceCase table indexes
+CREATE INDEX idx_case_contractid ON InsuranceCase(ContractID);
 CREATE INDEX idx_case_date ON InsuranceCase(CaseDate);
+
+-- Agent table indexes
+CREATE INDEX idx_agent_branchid ON Agent(BranchID);
+
+-- Audit_Log table indexes
 CREATE INDEX idx_audit_entity ON Audit_Log(Entity, EntityID);
+CREATE INDEX idx_audit_changedby ON Audit_Log(ChangedBy);
 CREATE INDEX idx_audit_changed_at ON Audit_Log(ChangedAt);
 
 -- Функція розрахунку страхового внеску
+-- Бізнес-правило: ContributionAmount = InsuranceAmount * BaseRate
+-- Використовується тригером trg_calculate_contribution для автоматичного розрахунку внеску
+-- при створенні або оновленні договору
 CREATE OR REPLACE FUNCTION CalculateContribution(
     p_insurance_amount IN NUMBER,
     p_base_rate IN NUMBER
@@ -150,7 +164,11 @@ BEGIN
 END;
 /
 
--- Функція розрахунку нарахованої виплати
+-- Функція розрахунку нарахованої виплати та встановлення AccruedDate
+-- Бізнес-правило: AccruedPayment = InsuranceAmount * DamageLevel * PayoutCoeff
+-- Обмеження: виплата не може перевищувати суму страхування
+-- Використовується тригером trg_calculate_case_payment для автоматичного розрахунку
+-- при створенні або оновленні страхового випадку
 CREATE OR REPLACE FUNCTION CalculateAccruedPayment(
     p_insurance_amount IN NUMBER,
     p_damage_level IN NUMBER,
@@ -168,6 +186,10 @@ END;
 /
 
 -- Функція перевірки можливості створити договір (правило блокування)
+-- Бізнес-правило: клієнт не може створити новий договір, якщо кількість випадків
+-- перевищує 50% від кількості його договорів (не Draft)
+-- Повертає 1 якщо можна створити, 0 якщо заборонено
+-- Використовується тригером trg_contract_uplift_and_validation для валідації
 CREATE OR REPLACE FUNCTION CanCreateContract(
     p_client_id IN INTEGER
 ) RETURN NUMBER IS
@@ -195,7 +217,11 @@ BEGIN
 END;
 /
 
--- Функція розрахунку підвищення (uplift)
+-- Функція розрахунку підвищення (uplift) для лояльних клієнтів
+-- Бізнес-правило: підвищення страхової суми для клієнтів з багатьма договорами
+-- - 10% підвищення: якщо >4 активних договорів АБО >=20 загальних договорів
+-- - 5% підвищення: якщо >2 активних договорів АБО >=10 загальних договорів
+-- Використовується тригером trg_contract_uplift_and_validation при створенні договору
 CREATE OR REPLACE FUNCTION CalculateUplift(
     p_client_id IN INTEGER
 ) RETURN NUMBER IS
@@ -225,6 +251,10 @@ END;
 /
 
 -- Тригер: автоматичний розрахунок AccruedPayment та AccruedDate у InsuranceCase
+-- Бізнес-правило: при створенні/оновленні випадку автоматично розраховується
+-- нарахована виплата на основі суми страхування, рівня збитку та коефіцієнта виплати
+-- Встановлює AccruedDate = поточна дата
+-- Використовує функцію CalculateAccruedPayment
 CREATE OR REPLACE TRIGGER trg_calculate_case_payment
 BEFORE INSERT OR UPDATE OF ContractID, DamageLevel ON InsuranceCase
 FOR EACH ROW
@@ -246,6 +276,9 @@ END;
 /
 
 -- Тригер: автоматичний розрахунок ContributionAmount у Contract
+-- Бізнес-правило: при створенні/оновленні договору автоматично розраховується
+-- страховий внесок на основі суми страхування та базової ставки типу страхування
+-- Використовує функцію CalculateContribution
 CREATE OR REPLACE TRIGGER trg_calculate_contribution
 BEFORE INSERT OR UPDATE OF InsuranceAmount, InsuranceTypeID ON Contract
 FOR EACH ROW
@@ -263,6 +296,12 @@ END;
 /
 
 -- Тригер: застосування uplift та перевірка правила блокування при створенні договору
+-- Бізнес-правила:
+-- 1. Перевіряє можливість створення договору (CanCreateContract) - блокує якщо клієнт має
+--    занадто багато випадків відносно договорів
+-- 2. Застосовує підвищення (uplift) для лояльних клієнтів, якщо статус не Draft
+-- 3. Встановлює AgentPercent за замовчуванням з InsuranceType, якщо не вказано
+-- Використовує функції CanCreateContract та CalculateUplift
 CREATE OR REPLACE TRIGGER trg_contract_uplift_and_validation
 BEFORE INSERT ON Contract
 FOR EACH ROW
@@ -305,51 +344,198 @@ BEGIN
 END;
 /
 
+-- Пакет для зберігання контексту користувача для аудиту
+-- Дозволяє тригерам отримувати UserID користувача, який виконує операцію
+CREATE OR REPLACE PACKAGE AuditContext AS
+    PROCEDURE SetUserID(p_user_id IN INTEGER);
+    FUNCTION GetUserID RETURN INTEGER;
+END AuditContext;
+/
+
+CREATE OR REPLACE PACKAGE BODY AuditContext AS
+    g_user_id INTEGER := NULL;
+    
+    PROCEDURE SetUserID(p_user_id IN INTEGER) IS
+    BEGIN
+        g_user_id := p_user_id;
+    END SetUserID;
+    
+    FUNCTION GetUserID RETURN INTEGER IS
+    BEGIN
+        RETURN g_user_id;
+    END GetUserID;
+END AuditContext;
+/
+
 -- Тригер: аудит змін Contract
+-- Логує всі зміни (INSERT, UPDATE, DELETE) в таблиці Contract до Audit_Log
+-- Зберігає Entity='Contract', EntityID, Action, ChangedBy, та JSON Payload з ключовими даними
+-- Використовується для відстеження історії змін договорів
 CREATE OR REPLACE TRIGGER trg_audit_contract
 AFTER INSERT OR UPDATE OR DELETE ON Contract
 FOR EACH ROW
 DECLARE
     v_action VARCHAR2(20);
     v_payload CLOB;
+    v_changed_by INTEGER;
 BEGIN
+    v_changed_by := AuditContext.GetUserID();
+    
     IF INSERTING THEN
         v_action := 'INSERT';
-        v_payload := '{"ContractID":' || :NEW.ContractID || ',"ClientID":' || :NEW.ClientID || ',"AgentID":' || :NEW.AgentID || '}';
+        v_payload := '{"ContractID":' || :NEW.ContractID || ',"ClientID":' || :NEW.ClientID || ',"AgentID":' || :NEW.AgentID || ',"InsuranceAmount":' || :NEW.InsuranceAmount || ',"Status":"' || :NEW.Status || '"}';
     ELSIF UPDATING THEN
         v_action := 'UPDATE';
-        v_payload := '{"ContractID":' || :NEW.ContractID || ',"Status":"' || :NEW.Status || '"}';
+        v_payload := '{"ContractID":' || :NEW.ContractID || ',"Status":"' || :NEW.Status || '","InsuranceAmount":' || :NEW.InsuranceAmount || '}';
     ELSIF DELETING THEN
         v_action := 'DELETE';
         v_payload := '{"ContractID":' || :OLD.ContractID || '}';
     END IF;
     
-    INSERT INTO Audit_Log (LogID, Entity, EntityID, Action, Payload)
-    VALUES (seq_audit_log_id.NEXTVAL, 'Contract', COALESCE(:NEW.ContractID, :OLD.ContractID), v_action, v_payload);
+    INSERT INTO Audit_Log (LogID, Entity, EntityID, Action, ChangedBy, Payload)
+    VALUES (seq_audit_log_id.NEXTVAL, 'Contract', COALESCE(:NEW.ContractID, :OLD.ContractID), v_action, v_changed_by, v_payload);
 END;
 /
 
 -- Тригер: аудит змін InsuranceCase
+-- Логує всі зміни (INSERT, UPDATE, DELETE) в таблиці InsuranceCase до Audit_Log
+-- Зберігає Entity='InsuranceCase', EntityID, Action, ChangedBy, та JSON Payload з ключовими даними
+-- Використовується для відстеження історії змін страхових випадків
 CREATE OR REPLACE TRIGGER trg_audit_case
 AFTER INSERT OR UPDATE OR DELETE ON InsuranceCase
 FOR EACH ROW
 DECLARE
     v_action VARCHAR2(20);
     v_payload CLOB;
+    v_changed_by INTEGER;
 BEGIN
+    v_changed_by := AuditContext.GetUserID();
+    
     IF INSERTING THEN
         v_action := 'INSERT';
-        v_payload := '{"CaseID":' || :NEW.CaseID || ',"ContractID":' || :NEW.ContractID || '}';
+        v_payload := '{"CaseID":' || :NEW.CaseID || ',"ContractID":' || :NEW.ContractID || ',"CaseDate":"' || TO_CHAR(:NEW.CaseDate, 'YYYY-MM-DD') || '","DamageLevel":' || :NEW.DamageLevel || '}';
     ELSIF UPDATING THEN
         v_action := 'UPDATE';
-        v_payload := '{"CaseID":' || :NEW.CaseID || ',"PaymentDate":"' || TO_CHAR(:NEW.PaymentDate, 'YYYY-MM-DD') || '"}';
+        v_payload := '{"CaseID":' || :NEW.CaseID || ',"PaymentDate":"' || TO_CHAR(:NEW.PaymentDate, 'YYYY-MM-DD') || '","AccruedPayment":' || NVL(:NEW.AccruedPayment, 0) || '}';
     ELSIF DELETING THEN
         v_action := 'DELETE';
         v_payload := '{"CaseID":' || :OLD.CaseID || '}';
     END IF;
     
-    INSERT INTO Audit_Log (LogID, Entity, EntityID, Action, Payload)
-    VALUES (seq_audit_log_id.NEXTVAL, 'InsuranceCase', COALESCE(:NEW.CaseID, :OLD.CaseID), v_action, v_payload);
+    INSERT INTO Audit_Log (LogID, Entity, EntityID, Action, ChangedBy, Payload)
+    VALUES (seq_audit_log_id.NEXTVAL, 'InsuranceCase', COALESCE(:NEW.CaseID, :OLD.CaseID), v_action, v_changed_by, v_payload);
+END;
+/
+
+-- Тригер: аудит змін Client
+-- Логує всі зміни (INSERT, UPDATE, DELETE) в таблиці Client до Audit_Log
+CREATE OR REPLACE TRIGGER trg_audit_client
+AFTER INSERT OR UPDATE OR DELETE ON Client
+FOR EACH ROW
+DECLARE
+    v_action VARCHAR2(20);
+    v_payload CLOB;
+    v_changed_by INTEGER;
+BEGIN
+    v_changed_by := AuditContext.GetUserID();
+    
+    IF INSERTING THEN
+        v_action := 'INSERT';
+        v_payload := '{"ClientID":' || :NEW.ClientID || ',"LastName":"' || :NEW.LastName || '","FirstName":"' || :NEW.FirstName || '","Email":"' || NVL(:NEW.Email, '') || '"}';
+    ELSIF UPDATING THEN
+        v_action := 'UPDATE';
+        v_payload := '{"ClientID":' || :NEW.ClientID || ',"LastName":"' || :NEW.LastName || '","FirstName":"' || :NEW.FirstName || '","Email":"' || NVL(:NEW.Email, '') || '"}';
+    ELSIF DELETING THEN
+        v_action := 'DELETE';
+        v_payload := '{"ClientID":' || :OLD.ClientID || '}';
+    END IF;
+    
+    INSERT INTO Audit_Log (LogID, Entity, EntityID, Action, ChangedBy, Payload)
+    VALUES (seq_audit_log_id.NEXTVAL, 'Client', COALESCE(:NEW.ClientID, :OLD.ClientID), v_action, v_changed_by, v_payload);
+END;
+/
+
+-- Тригер: аудит змін Agent
+-- Логує всі зміни (INSERT, UPDATE, DELETE) в таблиці Agent до Audit_Log
+CREATE OR REPLACE TRIGGER trg_audit_agent
+AFTER INSERT OR UPDATE OR DELETE ON Agent
+FOR EACH ROW
+DECLARE
+    v_action VARCHAR2(20);
+    v_payload CLOB;
+    v_changed_by INTEGER;
+BEGIN
+    v_changed_by := AuditContext.GetUserID();
+    
+    IF INSERTING THEN
+        v_action := 'INSERT';
+        v_payload := '{"AgentID":' || :NEW.AgentID || ',"FullName":"' || :NEW.FullName || '","BranchID":' || NVL(:NEW.BranchID, 0) || ',"Email":"' || NVL(:NEW.Email, '') || '"}';
+    ELSIF UPDATING THEN
+        v_action := 'UPDATE';
+        v_payload := '{"AgentID":' || :NEW.AgentID || ',"FullName":"' || :NEW.FullName || '","BranchID":' || NVL(:NEW.BranchID, 0) || '}';
+    ELSIF DELETING THEN
+        v_action := 'DELETE';
+        v_payload := '{"AgentID":' || :OLD.AgentID || '}';
+    END IF;
+    
+    INSERT INTO Audit_Log (LogID, Entity, EntityID, Action, ChangedBy, Payload)
+    VALUES (seq_audit_log_id.NEXTVAL, 'Agent', COALESCE(:NEW.AgentID, :OLD.AgentID), v_action, v_changed_by, v_payload);
+END;
+/
+
+-- Тригер: аудит змін Branch
+-- Логує всі зміни (INSERT, UPDATE, DELETE) в таблиці Branch до Audit_Log
+CREATE OR REPLACE TRIGGER trg_audit_branch
+AFTER INSERT OR UPDATE OR DELETE ON Branch
+FOR EACH ROW
+DECLARE
+    v_action VARCHAR2(20);
+    v_payload CLOB;
+    v_changed_by INTEGER;
+BEGIN
+    v_changed_by := AuditContext.GetUserID();
+    
+    IF INSERTING THEN
+        v_action := 'INSERT';
+        v_payload := '{"BranchID":' || :NEW.BranchID || ',"Name":"' || :NEW.Name || '"}';
+    ELSIF UPDATING THEN
+        v_action := 'UPDATE';
+        v_payload := '{"BranchID":' || :NEW.BranchID || ',"Name":"' || :NEW.Name || '"}';
+    ELSIF DELETING THEN
+        v_action := 'DELETE';
+        v_payload := '{"BranchID":' || :OLD.BranchID || '}';
+    END IF;
+    
+    INSERT INTO Audit_Log (LogID, Entity, EntityID, Action, ChangedBy, Payload)
+    VALUES (seq_audit_log_id.NEXTVAL, 'Branch', COALESCE(:NEW.BranchID, :OLD.BranchID), v_action, v_changed_by, v_payload);
+END;
+/
+
+-- Тригер: аудит змін InsuranceType
+-- Логує всі зміни (INSERT, UPDATE, DELETE) в таблиці InsuranceType до Audit_Log
+CREATE OR REPLACE TRIGGER trg_audit_insurance_type
+AFTER INSERT OR UPDATE OR DELETE ON InsuranceType
+FOR EACH ROW
+DECLARE
+    v_action VARCHAR2(20);
+    v_payload CLOB;
+    v_changed_by INTEGER;
+BEGIN
+    v_changed_by := AuditContext.GetUserID();
+    
+    IF INSERTING THEN
+        v_action := 'INSERT';
+        v_payload := '{"InsuranceTypeID":' || :NEW.InsuranceTypeID || ',"Name":"' || :NEW.Name || '","BaseRate":' || :NEW.BaseRate || '}';
+    ELSIF UPDATING THEN
+        v_action := 'UPDATE';
+        v_payload := '{"InsuranceTypeID":' || :NEW.InsuranceTypeID || ',"Name":"' || :NEW.Name || '","BaseRate":' || :NEW.BaseRate || '}';
+    ELSIF DELETING THEN
+        v_action := 'DELETE';
+        v_payload := '{"InsuranceTypeID":' || :OLD.InsuranceTypeID || '}';
+    END IF;
+    
+    INSERT INTO Audit_Log (LogID, Entity, EntityID, Action, ChangedBy, Payload)
+    VALUES (seq_audit_log_id.NEXTVAL, 'InsuranceType', COALESCE(:NEW.InsuranceTypeID, :OLD.InsuranceTypeID), v_action, v_changed_by, v_payload);
 END;
 /
 

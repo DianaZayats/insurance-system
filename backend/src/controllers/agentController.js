@@ -8,9 +8,10 @@ const getAll = async (req, res, next) => {
         const name = req.query.name || '';
         const branchId = req.query.branchId;
 
-        let sql = `SELECT a.AgentID, a.FullName, a.Phone, a.Email, a.HireDate, a.BranchID, b.Name as BranchName
+        let sql = `SELECT a.AgentID, a.FullName, a.Phone, a.Email, a.HireDate, a.BranchID, b.Name as BranchName, u.Email as UserEmail
                    FROM Agent a
                    LEFT JOIN Branch b ON a.BranchID = b.BranchID
+                   LEFT JOIN Users u ON u.AgentID = a.AgentID
                    WHERE 1=1`;
         const binds = {};
 
@@ -23,7 +24,7 @@ const getAll = async (req, res, next) => {
             binds.branchId = parseInt(branchId);
         }
 
-        sql += ` ORDER BY a.FullName OFFSET :offset ROWS FETCH NEXT :limit ROWS ONLY`;
+        sql += ` ORDER BY a.AgentID DESC OFFSET :offset ROWS FETCH NEXT :limit ROWS ONLY`;
 
         const result = await db.execute(sql, {
             ...binds,
@@ -45,7 +46,8 @@ const getAll = async (req, res, next) => {
                 email: row.EMAIL,
                 hireDate: row.HIREDATE,
                 branchId: row.BRANCHID,
-                branchName: row.BRANCHNAME
+                branchName: row.BRANCHNAME,
+                userEmail: row.USEREMAIL || null
             })),
             pagination: { page, limit, total, totalPages: Math.ceil(total / limit) }
         });
@@ -58,9 +60,10 @@ const getById = async (req, res, next) => {
     try {
         const { id } = req.params;
         const result = await db.execute(
-            `SELECT a.AgentID, a.FullName, a.Phone, a.Email, a.HireDate, a.BranchID, b.Name as BranchName
+            `SELECT a.AgentID, a.FullName, a.Phone, a.Email, a.HireDate, a.BranchID, b.Name as BranchName, u.Email as UserEmail
              FROM Agent a
              LEFT JOIN Branch b ON a.BranchID = b.BranchID
+             LEFT JOIN Users u ON u.AgentID = a.AgentID
              WHERE a.AgentID = :id`,
             { id: parseInt(id) }
         );
@@ -79,7 +82,8 @@ const getById = async (req, res, next) => {
             email: row.EMAIL,
             hireDate: row.HIREDATE,
             branchId: row.BRANCHID,
-            branchName: row.BRANCHNAME
+            branchName: row.BRANCHNAME,
+            userEmail: row.USEREMAIL || null
         });
     } catch (err) {
         next(err);
@@ -99,7 +103,7 @@ const create = async (req, res, next) => {
                 hireDate,
                 branchId: branchId || null
             },
-            { autoCommit: true }
+            { autoCommit: true, auditUserId: req.user.USERID }
         );
 
         const newAgent = await db.execute(
@@ -144,7 +148,7 @@ const update = async (req, res, next) => {
         }
 
         const sql = `UPDATE Agent SET ${updates.join(', ')} WHERE AgentID = :id`;
-        await db.execute(sql, binds, { autoCommit: true });
+        await db.execute(sql, binds, { autoCommit: true, auditUserId: req.user.USERID });
 
         const updated = await db.execute(
             `SELECT a.AgentID, a.FullName, a.Phone, a.Email, a.HireDate, a.BranchID, b.Name as BranchName
@@ -179,7 +183,7 @@ const remove = async (req, res, next) => {
         const result = await db.execute(
             `DELETE FROM Agent WHERE AgentID = :id`,
             { id: parseInt(id) },
-            { autoCommit: true }
+            { autoCommit: true, auditUserId: req.user.USERID }
         );
 
         if (result.rowsAffected === 0) {
