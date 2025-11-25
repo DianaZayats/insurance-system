@@ -12,6 +12,10 @@ const getAllAuditLogs = async (req, res, next) => {
 
         // Отримати загальну кількість записів
         const countQuery = `SELECT COUNT(*) as TOTAL FROM Audit_Log`;
+        /*
+         * SELECT COUNT(*) ... – підраховуємо кількість записів аудиту, щоб побудувати пагінацію.
+         * FROM Audit_Log – працюємо з таблицею журналу аудиту.
+         */
         const countResult = await db.execute(countQuery);
         const total = countResult.rows[0].TOTAL;
 
@@ -39,6 +43,13 @@ const getAllAuditLogs = async (req, res, next) => {
             ORDER BY ChangedAt DESC
             OFFSET :offset ROWS FETCH NEXT :limit ROWS ONLY
         `;
+        /*
+         * SELECT ... – забираємо основні поля запису аудиту.
+         * FROM_TZ(... AT TIME ZONE 'Europe/Kiev') – переводимо мітку часу з UTC у київський час.
+         * TO_CHAR(DBMS_LOB.SUBSTR(...)) – перетворюємо CLOB payload у рядок, щоб повернути через API.
+         * ORDER BY ChangedAt DESC – показуємо найновіші зміни першими.
+         * OFFSET / FETCH – реалізуємо пагінацію.
+         */
         
         const binds = {
             offset: offset,

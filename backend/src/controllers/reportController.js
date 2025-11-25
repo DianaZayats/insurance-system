@@ -14,6 +14,12 @@ const maxContributionMonth = async (req, res, next) => {
              ORDER BY SUM(ContributionAmount) DESC
              FETCH FIRST 1 ROWS ONLY`
         );
+        /*
+         * SELECT TO_CHAR(StartDate, 'YYYY-MM') ... – групуємо договори за місяцями.
+         * SUM(ContributionAmount) – підраховуємо суму внесків за місяць.
+         * WHERE Status != 'Draft' – ігноруємо чорнові договори.
+         * ORDER BY ... FETCH FIRST 1 – знаходимо місяць із максимальною сумою.
+         */
 
         if (result.rows.length === 0) {
             return res.json({ month: null, totalContributions: 0 });
@@ -55,6 +61,13 @@ const agentIncome = async (req, res, next) => {
              ORDER BY TotalIncome DESC`,
             { month }
         );
+        /*
+         * SELECT ... – рахуємо дохід кожного агента за вказаний місяць.
+         * SUM(ContributionAmount * AgentPercent) – загальний заробіток агента.
+         * WHERE TO_CHAR(...) = :month – фільтр за місяцем у форматі YYYY-MM.
+         * AND c.Status != 'Draft' – враховуємо лише реальні договори.
+         * ORDER BY TotalIncome DESC – сортуємо від найбільшого доходу.
+         */
 
         res.json({
             month,
@@ -90,6 +103,11 @@ const mostDemandedTypePerClient = async (req, res, next) => {
             WHERE rn = 1
             ORDER BY ClientID`
         );
+        /*
+         * WITH ClientTypeCounts AS (...) – рахуємо кількість договорів кожного клієнта за типами страхування,
+         * додаємо ROW_NUMBER, щоб знайти найпопулярніший тип.
+         * SELECT ... WHERE rn = 1 – залишаємо по одному запису з максимальним ContractCount для кожного клієнта.
+         */
 
         res.json({
             data: result.rows.map(row => ({
@@ -128,6 +146,9 @@ const activeContracts = async (req, res, next) => {
                 `SELECT ClientID FROM Client WHERE ClientID = :clientId AND Email = :email`,
                 { clientId: parseInt(clientId), email: req.user.EMAIL }
             );
+            /*
+             * SELECT ClientID ... – перевіряємо, що клієнт дійсно запитує свої договори.
+             */
             if (clientCheck.rows.length === 0) {
                 return res.status(403).json({
                     error: { code: 'FORBIDDEN', message: 'Access denied', details: {} }
@@ -138,6 +159,9 @@ const activeContracts = async (req, res, next) => {
                 `SELECT COUNT(*) as CNT FROM Contract WHERE ClientID = :clientId AND AgentID = :agentId`,
                 { clientId: parseInt(clientId), agentId: req.user.AGENTID }
             );
+            /*
+             * SELECT COUNT(*) ... – впевнюємося, що у агента є договори з цим клієнтом.
+             */
             if (contractCheck.rows[0].CNT === 0) {
                 return res.status(403).json({
                     error: { code: 'FORBIDDEN', message: 'Client not in your portfolio', details: {} }
@@ -158,6 +182,11 @@ const activeContracts = async (req, res, next) => {
              ORDER BY c.StartDate DESC`,
             { clientId: parseInt(clientId) }
         );
+        /*
+         * SELECT ... – дістаємо активні договори клієнта разом із назвами типів і агентами.
+         * WHERE c.Status = 'Active' AND c.EndDate >= SYSDATE – залишаємо лише чинні договори.
+         * ORDER BY c.StartDate DESC – сортуємо за датою початку в зворотному порядку.
+         */
 
         res.json({
             clientId: parseInt(clientId),
@@ -198,6 +227,10 @@ const caseExtremes = async (req, res, next) => {
                  ORDER BY COUNT(ic.CaseID) DESC
                  FETCH FIRST 10 ROWS ONLY`
             );
+            /*
+             * SELECT ... COUNT(ic.CaseID) – підраховуємо кількість страхових випадків на клієнта.
+             * ORDER BY ... FETCH FIRST 10 – показуємо топ-10 клієнтів з найбільшою кількістю випадків.
+             */
 
             res.json({
                 mode: 'most',
@@ -219,6 +252,10 @@ const caseExtremes = async (req, res, next) => {
                  )
                  ORDER BY c.ClientID`
             );
+            /*
+             * SELECT ... WHERE NOT IN (...) – знаходимо клієнтів, у яких немає жодного страхового випадку.
+             * ORDER BY c.ClientID – сортуємо для стабільного виводу.
+             */
 
             res.json({
                 mode: 'zero',
@@ -249,6 +286,10 @@ const caseExtremes = async (req, res, next) => {
 const allTypesUsedClients = async (req, res, next) => {
     try {
         const totalTypesResult = await db.execute(`SELECT COUNT(*) as TOTAL FROM InsuranceType`);
+        /*
+         * SELECT COUNT(*) ... – дізнаємося, скільки всього типів страхування існує,
+         * щоб потім порівняти з кількістю типів на клієнта.
+         */
         const totalTypes = totalTypesResult.rows[0].TOTAL;
 
         const result = await db.execute(
@@ -262,6 +303,10 @@ const allTypesUsedClients = async (req, res, next) => {
              ORDER BY c.ClientID`,
             { totalTypes }
         );
+        /*
+         * SELECT ... COUNT(DISTINCT ...) – рахуємо, скільки різних типів страхування має кожен клієнт.
+         * HAVING COUNT(...) = :totalTypes – залишаємо тільки тих, хто покрив усі типи.
+         */
 
         res.json({
             totalTypes,
@@ -297,6 +342,10 @@ const exportCSV = async (req, res, next) => {
                      GROUP BY TO_CHAR(StartDate, 'YYYY-MM')
                      ORDER BY SUM(ContributionAmount) DESC FETCH FIRST 1 ROWS ONLY`
                 );
+                /*
+                 * SELECT ... – той самий запит, що й у maxContributionMonth,
+                 * використовується для експорту до CSV.
+                 */
                 headers = ['Month', 'TotalContributions'];
                 data = maxMonth.rows.map(r => [r.MONTH, r.TOTALCONTRIBUTIONS]);
                 break;
@@ -315,6 +364,9 @@ const exportCSV = async (req, res, next) => {
                      GROUP BY a.AgentID, a.FullName`,
                     { month }
                 );
+                /*
+                 * SELECT ... – дублює запит звіту agentIncome для експорту.
+                 */
                 headers = ['AgentID', 'FullName', 'TotalIncome'];
                 data = income.rows.map(r => [r.AGENTID, r.FULLNAME, r.TOTALINCOME]);
                 break;
@@ -333,6 +385,10 @@ const exportCSV = async (req, res, next) => {
                     SELECT ClientID, LastName, FirstName, TypeName, ContractCount
                     FROM ClientTypeCounts WHERE rn = 1`
                 );
+                /*
+                 * WITH ... SELECT ... – та ж логіка, що у звіті mostDemandedTypePerClient,
+                 * але для експорту у CSV.
+                 */
                 headers = ['ClientID', 'LastName', 'FirstName', 'TypeName', 'ContractCount'];
                 data = demanded.rows.map(r => [r.CLIENTID, r.LASTNAME, r.FIRSTNAME, r.TYPENAME, r.CONTRACTCOUNT]);
                 break;
@@ -349,6 +405,9 @@ const exportCSV = async (req, res, next) => {
                      WHERE c.ClientID = :clientId AND c.Status = 'Active' AND c.EndDate >= SYSDATE`,
                     { clientId: parseInt(clientId) }
                 );
+                /*
+                 * SELECT ... – отримуємо діючі договори клієнта (для CSV).
+                 */
                 headers = ['ContractID', 'ClientID', 'StartDate', 'EndDate', 'InsuranceAmount', 'TypeName'];
                 data = contracts.rows.map(r => [r.CONTRACTID, r.CLIENTID, r.STARTDATE, r.ENDDATE, r.INSURANCEAMOUNT, r.TYPENAME]);
                 break;
@@ -364,6 +423,9 @@ const exportCSV = async (req, res, next) => {
                          GROUP BY c.ClientID, c.LastName, c.FirstName
                          ORDER BY COUNT(ic.CaseID) DESC FETCH FIRST 10 ROWS ONLY`
                     );
+                    /*
+                     * SELECT ... – повторюємо логіку режиму "most" для експорту.
+                     */
                     headers = ['ClientID', 'LastName', 'FirstName', 'CaseCount'];
                     data = most.rows.map(r => [r.CLIENTID, r.LASTNAME, r.FIRSTNAME, r.CASECOUNT]);
                 } else {
@@ -374,13 +436,20 @@ const exportCSV = async (req, res, next) => {
                              SELECT DISTINCT ct.ClientID FROM Contract ct JOIN InsuranceCase ic ON ct.ContractID = ic.ContractID
                          )`
                     );
+                    /*
+                     * SELECT ... WHERE NOT IN – формуємо список клієнтів без страхових випадків.
+                     */
                     headers = ['ClientID', 'LastName', 'FirstName', 'CaseCount'];
                     data = zero.rows.map(r => [r.CLIENTID, r.LASTNAME, r.FIRSTNAME, 0]);
                 }
                 break;
 
             case 'all-types-used-clients':
-                const totalTypes = (await db.execute(`SELECT COUNT(*) as TOTAL FROM InsuranceType`)).rows[0].TOTAL;
+                const totalTypesResultExport = await db.execute(`SELECT COUNT(*) as TOTAL FROM InsuranceType`);
+                /*
+                 * SELECT COUNT(*) ... – визначаємо загальну кількість типів страхування для CSV-звіту.
+                 */
+                const totalTypes = totalTypesResultExport.rows[0].TOTAL;
                 const allTypes = await db.execute(
                     `SELECT c.ClientID, c.LastName, c.FirstName, COUNT(DISTINCT ct.InsuranceTypeID) as TypesUsed
                      FROM Client c
@@ -390,6 +459,10 @@ const exportCSV = async (req, res, next) => {
                      HAVING COUNT(DISTINCT ct.InsuranceTypeID) = :totalTypes`,
                     { totalTypes }
                 );
+                /*
+                 * SELECT ... HAVING COUNT(DISTINCT ...) – шукаємо клієнтів, які охопили всі типи,
+                 * аналогічно базовому звіту.
+                 */
                 headers = ['ClientID', 'LastName', 'FirstName', 'TypesUsed'];
                 data = allTypes.rows.map(r => [r.CLIENTID, r.LASTNAME, r.FIRSTNAME, r.TYPESUSED]);
                 break;

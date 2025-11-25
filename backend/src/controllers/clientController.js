@@ -12,32 +12,50 @@ const getAll = async (req, res, next) => {
         const phone = req.query.phone || '';
         const email = req.query.email || '';
 
-        let sql = `SELECT ClientID, LastName, FirstName, MiddleName, Address, Phone, Email FROM Client WHERE 1=1`;
+        let sql = `
+            SELECT ClientID, LastName, FirstName, MiddleName, Address, Phone, Email
+            FROM Client
+            WHERE 1=1
+        `;
+        /*
+         * SELECT ... – забираємо повну анкету клієнта.
+         * FROM Client – працюємо з таблицею клієнтів.
+         * WHERE 1=1 – базова умова для подальших фільтрів.
+         */
         const binds = {};
 
         if (name) {
             sql += ` AND (UPPER(LastName) LIKE UPPER(:name) OR UPPER(FirstName) LIKE UPPER(:name))`;
+            // Пошук за прізвищем або ім'ям без урахування регістру
             binds.name = `%${name}%`;
         }
         if (phone) {
             sql += ` AND Phone LIKE :phone`;
+            // Фільтруємо за фрагментом номера телефону
             binds.phone = `%${phone}%`;
         }
         if (email) {
             sql += ` AND UPPER(Email) LIKE UPPER(:email)`;
+            // Пошук за email, без урахування регістру
             binds.email = `%${email}%`;
         }
 
         // Розмежування доступу за ролями
         if (req.user.ROLE === 'Agent') {
             sql += ` AND ClientID IN (SELECT DISTINCT ClientID FROM Contract WHERE AgentID = :agentId)`;
+            // Агент бачить лише клієнтів зі своїх договорів
             binds.agentId = req.user.AGENTID;
         } else if (req.user.ROLE === 'Client') {
             sql += ` AND Email = :userEmail`;
+            // Клієнт може переглядати лише власний профіль
             binds.userEmail = req.user.EMAIL;
         }
 
         sql += ` ORDER BY ClientID DESC OFFSET :offset ROWS FETCH NEXT :limit ROWS ONLY`;
+        /*
+         * ORDER BY ClientID DESC – показуємо нових клієнтів першими.
+         * OFFSET / FETCH – реалізація пагінації.
+         */
 
         const result = await db.execute(sql, {
             ...binds,
@@ -46,7 +64,14 @@ const getAll = async (req, res, next) => {
         });
 
         // Отримати загальну кількість записів
-        let countSql = `SELECT COUNT(*) as TOTAL FROM Client WHERE 1=1`;
+        let countSql = `
+            SELECT COUNT(*) as TOTAL
+            FROM Client
+            WHERE 1=1
+        `;
+        /*
+         * SELECT COUNT(*) ... – підраховуємо кількість клієнтів для пагінації.
+         */
         if (name) countSql += ` AND (UPPER(LastName) LIKE UPPER(:name) OR UPPER(FirstName) LIKE UPPER(:name))`;
         if (phone) countSql += ` AND Phone LIKE :phone`;
         if (email) countSql += ` AND UPPER(Email) LIKE UPPER(:email)`;
@@ -88,7 +113,15 @@ const getById = async (req, res, next) => {
     try {
         const { id } = req.params;
 
-        let sql = `SELECT ClientID, LastName, FirstName, MiddleName, Address, Phone, Email FROM Client WHERE ClientID = :id`;
+        let sql = `
+            SELECT ClientID, LastName, FirstName, MiddleName, Address, Phone, Email
+            FROM Client
+            WHERE ClientID = :id
+        `;
+        /*
+         * SELECT ... – повертаємо повну інформацію про конкретного клієнта.
+         * WHERE ClientID = :id – знаходимо запис за переданим ідентифікатором.
+         */
         const binds = { id: parseInt(id) };
 
         // Розмежування доступу за ролями
@@ -147,6 +180,11 @@ const create = async (req, res, next) => {
             },
             { autoCommit: true, auditUserId: req.user.USERID }
         );
+        /*
+         * INSERT INTO Client ... – створюємо нового клієнта.
+         * seq_client_id.NEXTVAL – генеруємо унікальний ClientID.
+         * Усі поля беруться з тіла запиту, необов’язкові значення можуть бути NULL.
+         */
 
         // Отримати щойно створеного клієнта
         const newClient = await db.execute(
@@ -155,6 +193,10 @@ const create = async (req, res, next) => {
              ORDER BY ClientID DESC FETCH FIRST 1 ROWS ONLY`,
             { lastName, firstName }
         );
+        /*
+         * SELECT ... ORDER BY ... FETCH FIRST 1 – повертаємо щойно створений запис,
+         * покладаючись на те, що він має найбільший ClientID серед записів із таким ПІБ.
+         */
 
         res.status(201).json({
             clientId: newClient.rows[0].CLIENTID,
@@ -219,6 +261,10 @@ const update = async (req, res, next) => {
 
         const sql = `UPDATE Client SET ${updates.join(', ')} WHERE ClientID = :id`;
         const result = await db.execute(sql, binds, { autoCommit: true, auditUserId: req.user.USERID });
+        /*
+         * UPDATE Client ... – оновлюємо лише ті поля, які передав користувач.
+         * WHERE ClientID = :id – працюємо з конкретним клієнтом.
+         */
 
         if (result.rowsAffected === 0) {
             return res.status(404).json({
@@ -231,9 +277,13 @@ const update = async (req, res, next) => {
         }
 
         const updated = await db.execute(
-            `SELECT ClientID, LastName, FirstName, MiddleName, Address, Phone, Email FROM Client WHERE ClientID = :id`,
+            `SELECT ClientID, LastName, FirstName, MiddleName, Address, Phone, Email
+             FROM Client WHERE ClientID = :id`,
             { id: parseInt(id) }
         );
+        /*
+         * SELECT ... – повертаємо актуальні дані клієнта після оновлення.
+         */
 
         res.json({
             clientId: updated.rows[0].CLIENTID,
@@ -261,6 +311,10 @@ const remove = async (req, res, next) => {
             { id: parseInt(id) },
             { autoCommit: true, auditUserId: req.user.USERID }
         );
+        /*
+         * DELETE FROM Client ... – видаляємо клієнта з довідника.
+         * WHERE ClientID = :id – працюємо з конкретним записом.
+         */
 
         if (result.rowsAffected === 0) {
             return res.status(404).json({
@@ -289,11 +343,18 @@ const getContracts = async (req, res, next) => {
         const limit = parseInt(req.query.limit) || 20;
         const offset = (page - 1) * limit;
 
-        let sql = `SELECT c.ContractID, c.ClientID, c.AgentID, c.InsuranceTypeID, 
-                          c.StartDate, c.EndDate, c.InsuranceAmount, c.ContributionAmount, 
-                          c.AgentPercent, c.Status
-                   FROM Contract c
-                   WHERE c.ClientID = :clientId`;
+        let sql = `
+            SELECT c.ContractID, c.ClientID, c.AgentID, c.InsuranceTypeID,
+                   c.StartDate, c.EndDate, c.InsuranceAmount, c.ContributionAmount,
+                   c.AgentPercent, c.Status
+            FROM Contract c
+            WHERE c.ClientID = :clientId
+        `;
+        /*
+         * SELECT ... – отримуємо деталі договорів клієнта.
+         * FROM Contract c – читаємо з таблиці договорів.
+         * WHERE c.ClientID = :clientId – залишаємо тільки договори вказаного клієнта.
+         */
         const binds = { clientId: parseInt(id) };
 
         // Розмежування доступу за ролями
@@ -302,6 +363,9 @@ const getContracts = async (req, res, next) => {
                 `SELECT ClientID FROM Client WHERE ClientID = :id AND Email = :email`,
                 { id: parseInt(id), email: req.user.EMAIL }
             );
+            /*
+             * SELECT ClientID ... – переконуємося, що клієнт запитує лише власні договори.
+             */
             if (clientCheck.rows.length === 0) {
                 return res.status(403).json({
                     error: {
@@ -313,14 +377,20 @@ const getContracts = async (req, res, next) => {
             }
         } else if (req.user.ROLE === 'Agent') {
             sql += ` AND c.AgentID = :agentId`;
+            // Агент бачить договори лише зі свого портфеля
             binds.agentId = req.user.AGENTID;
         }
 
         if (activeOnly) {
             sql += ` AND c.Status = 'Active' AND c.EndDate >= SYSDATE`;
+            // Якщо потрібні лише активні договори – застосовуємо відповідні умови
         }
 
         sql += ` ORDER BY c.StartDate DESC OFFSET :offset ROWS FETCH NEXT :limit ROWS ONLY`;
+        /*
+         * ORDER BY c.StartDate DESC – показуємо найсвіжіші договори першими.
+         * OFFSET / FETCH – пагінація.
+         */
 
         const result = await db.execute(sql, {
             ...binds,
@@ -336,6 +406,10 @@ const getContracts = async (req, res, next) => {
         if (activeOnly) {
             countSql += ` AND Status = 'Active' AND EndDate >= SYSDATE`;
         }
+        /*
+         * SELECT COUNT(*) ... – підраховуємо кількість договорів клієнта,
+         * враховуючи фільтри агента та статусу.
+         */
         const countResult = await db.execute(countSql, binds);
         const total = countResult.rows[0].TOTAL;
 

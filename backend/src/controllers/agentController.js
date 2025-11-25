@@ -8,23 +8,41 @@ const getAll = async (req, res, next) => {
         const name = req.query.name || '';
         const branchId = req.query.branchId;
 
-        let sql = `SELECT a.AgentID, a.FullName, a.Phone, a.Email, a.HireDate, a.BranchID, b.Name as BranchName, u.Email as UserEmail
-                   FROM Agent a
-                   LEFT JOIN Branch b ON a.BranchID = b.BranchID
-                   LEFT JOIN Users u ON u.AgentID = a.AgentID
-                   WHERE 1=1`;
+        let sql = `
+            SELECT a.AgentID, a.FullName, a.Phone, a.Email, a.HireDate, a.BranchID,
+                   b.Name as BranchName, u.Email as UserEmail
+            FROM Agent a
+            LEFT JOIN Branch b ON a.BranchID = b.BranchID
+            LEFT JOIN Users u ON u.AgentID = a.AgentID
+            WHERE 1=1
+        `;
+        /*
+         * SELECT ... – отримуємо профіль агента разом із філією та даними користувача.
+         * FROM Agent a – беремо базові дані з таблиці агентів.
+         * LEFT JOIN Branch – підтягуємо назву філії, якщо вона задана.
+         * LEFT JOIN Users – показуємо email користувача, прив’язаного до агента.
+         * WHERE 1=1 – базова умова для подальших фільтрів за іменем/філією.
+         */
         const binds = {};
 
         if (name) {
             sql += ` AND UPPER(a.FullName) LIKE UPPER(:name)`;
+            // AND UPPER(a.FullName) ... – фільтруємо агентів за фрагментом імені без урахування регістру
             binds.name = `%${name}%`;
         }
         if (branchId) {
             sql += ` AND a.BranchID = :branchId`;
+            // AND a.BranchID ... – залишаємо тільки агентів конкретної філії
             binds.branchId = parseInt(branchId);
         }
 
-        sql += ` ORDER BY a.AgentID DESC OFFSET :offset ROWS FETCH NEXT :limit ROWS ONLY`;
+        sql += ` ORDER BY a.AgentID DESC
+                 OFFSET :offset ROWS
+                 FETCH NEXT :limit ROWS ONLY`;
+        /*
+         * ORDER BY ... – найновіші агенти відображаються першими.
+         * OFFSET .../FETCH ... – реалізація пагінації.
+         */
 
         const result = await db.execute(sql, {
             ...binds,
@@ -32,9 +50,22 @@ const getAll = async (req, res, next) => {
             limit
         });
 
-        let countSql = `SELECT COUNT(*) as TOTAL FROM Agent WHERE 1=1`;
-        if (name) countSql += ` AND UPPER(FullName) LIKE UPPER(:name)`;
-        if (branchId) countSql += ` AND BranchID = :branchId`;
+        let countSql = `
+            SELECT COUNT(*) as TOTAL
+            FROM Agent
+            WHERE 1=1
+        `;
+        /*
+         * SELECT COUNT(*) ... – підраховуємо кількість агентів із урахуванням фільтрів.
+         */
+        if (name) {
+            countSql += ` AND UPPER(FullName) LIKE UPPER(:name)`;
+            // AND UPPER(FullName) ... – враховуємо лише агентів, чиє ім’я підпадає під пошук
+        }
+        if (branchId) {
+            countSql += ` AND BranchID = :branchId`;
+            // AND BranchID ... – рахуємо тільки філію, яку вибрав користувач
+        }
         const countResult = await db.execute(countSql, binds);
         const total = countResult.rows[0].TOTAL;
 
@@ -60,13 +91,18 @@ const getById = async (req, res, next) => {
     try {
         const { id } = req.params;
         const result = await db.execute(
-            `SELECT a.AgentID, a.FullName, a.Phone, a.Email, a.HireDate, a.BranchID, b.Name as BranchName, u.Email as UserEmail
+            `SELECT a.AgentID, a.FullName, a.Phone, a.Email, a.HireDate, a.BranchID,
+                    b.Name as BranchName, u.Email as UserEmail
              FROM Agent a
              LEFT JOIN Branch b ON a.BranchID = b.BranchID
              LEFT JOIN Users u ON u.AgentID = a.AgentID
              WHERE a.AgentID = :id`,
             { id: parseInt(id) }
         );
+        /*
+         * SELECT ... – повертаємо розширену інформацію про конкретного агента.
+         * WHERE a.AgentID = :id – шукаємо за ідентифікатором із запиту.
+         */
 
         if (result.rows.length === 0) {
             return res.status(404).json({
@@ -105,6 +141,11 @@ const create = async (req, res, next) => {
             },
             { autoCommit: true, auditUserId: req.user.USERID }
         );
+        /*
+         * INSERT INTO Agent ... – створюємо нового агента.
+         * seq_agent_id.NEXTVAL – генеруємо унікальний AgentID.
+         * TO_DATE(...) – переводимо дату прийняття на роботу до формату DATE.
+         */
 
         const newAgent = await db.execute(
             `SELECT a.AgentID, a.FullName, a.Phone, a.Email, a.HireDate, a.BranchID, b.Name as BranchName
@@ -113,6 +154,10 @@ const create = async (req, res, next) => {
              WHERE a.FullName = :fullName ORDER BY a.AgentID DESC FETCH FIRST 1 ROWS ONLY`,
             { fullName }
         );
+        /*
+         * SELECT ... ORDER BY ... FETCH FIRST 1 – забираємо щойно створеного агента,
+         * припускаючи, що у нього найбільший ідентифікатор серед записів з таким ім’ям.
+         */
 
         res.status(201).json({
             agentId: newAgent.rows[0].AGENTID,
@@ -149,12 +194,19 @@ const update = async (req, res, next) => {
 
         const sql = `UPDATE Agent SET ${updates.join(', ')} WHERE AgentID = :id`;
         await db.execute(sql, binds, { autoCommit: true, auditUserId: req.user.USERID });
+        /*
+         * UPDATE Agent SET ... – змінюємо тільки передані поля.
+         * WHERE AgentID = :id – оновлюємо запис конкретного агента.
+         */
 
         const updated = await db.execute(
             `SELECT a.AgentID, a.FullName, a.Phone, a.Email, a.HireDate, a.BranchID, b.Name as BranchName
              FROM Agent a LEFT JOIN Branch b ON a.BranchID = b.BranchID WHERE a.AgentID = :id`,
             { id: parseInt(id) }
         );
+        /*
+         * SELECT ... – повертаємо оновлений запис, щоб клієнт отримав актуальні дані.
+         */
 
         if (updated.rows.length === 0) {
             return res.status(404).json({
@@ -185,6 +237,10 @@ const remove = async (req, res, next) => {
             { id: parseInt(id) },
             { autoCommit: true, auditUserId: req.user.USERID }
         );
+        /*
+         * DELETE FROM Agent ... – прибираємо агента з довідника.
+         * WHERE AgentID = :id – працюємо з конкретним записом за ID.
+         */
 
         if (result.rowsAffected === 0) {
             return res.status(404).json({

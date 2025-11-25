@@ -7,21 +7,40 @@ const getAll = async (req, res, next) => {
         const offset = (page - 1) * limit;
         const name = req.query.name || '';
 
-        let sql = `SELECT InsuranceTypeID, Name, Description, BaseRate, PayoutCoeff, AgentPercentDefault
-                   FROM InsuranceType WHERE 1=1`;
+        let sql = `
+            SELECT InsuranceTypeID, Name, Description, BaseRate, PayoutCoeff, AgentPercentDefault
+            FROM InsuranceType
+            WHERE 1=1
+        `;
+        /*
+         * SELECT ... – дістаємо всі характеристики типу страхування.
+         * WHERE 1=1 – точка входу для динамічних фільтрів.
+         */
         const binds = {};
 
         if (name) {
             sql += ` AND UPPER(Name) LIKE UPPER(:name)`;
+            // Фільтруємо типи страхування за назвою без урахування регістру
             binds.name = `%${name}%`;
         }
 
         sql += ` ORDER BY InsuranceTypeID DESC OFFSET :offset ROWS FETCH NEXT :limit ROWS ONLY`;
+        /*
+         * ORDER BY ... – відображаємо найновіші типи першими.
+         * OFFSET / FETCH – пагінація.
+         */
 
         const result = await db.execute(sql, { ...binds, offset, limit });
 
-        let countSql = `SELECT COUNT(*) as TOTAL FROM InsuranceType WHERE 1=1`;
+        let countSql = `
+            SELECT COUNT(*) as TOTAL
+            FROM InsuranceType
+            WHERE 1=1
+        `;
         if (name) countSql += ` AND UPPER(Name) LIKE UPPER(:name)`;
+        /*
+         * SELECT COUNT(*) ... – підраховуємо кількість типів із врахуванням фільтра за назвою.
+         */
         const countResult = await db.execute(countSql, binds);
         const total = countResult.rows[0].TOTAL;
 
@@ -49,6 +68,9 @@ const getById = async (req, res, next) => {
              FROM InsuranceType WHERE InsuranceTypeID = :id`,
             { id: parseInt(id) }
         );
+        /*
+         * SELECT ... WHERE InsuranceTypeID = :id – отримуємо повний опис конкретного типу страхування.
+         */
 
         if (result.rows.length === 0) {
             return res.status(404).json({
@@ -85,12 +107,19 @@ const create = async (req, res, next) => {
             },
             { autoCommit: true, auditUserId: req.user.USERID }
         );
+        /*
+         * INSERT INTO InsuranceType ... – додаємо новий тип страхування.
+         * seq_insurance_type_id.NEXTVAL – генеруємо унікальний ідентифікатор.
+         */
 
         const newType = await db.execute(
             `SELECT InsuranceTypeID, Name, Description, BaseRate, PayoutCoeff, AgentPercentDefault
              FROM InsuranceType WHERE Name = :name ORDER BY InsuranceTypeID DESC FETCH FIRST 1 ROWS ONLY`,
             { name }
         );
+        /*
+         * SELECT ... ORDER BY ... FETCH – повертаємо щойно створений запис для клієнта.
+         */
 
         res.status(201).json({
             insuranceTypeId: newType.rows[0].INSURANCETYPEID,
@@ -124,13 +153,24 @@ const update = async (req, res, next) => {
             });
         }
 
-        await db.execute(`UPDATE InsuranceType SET ${updates.join(', ')} WHERE InsuranceTypeID = :id`, binds, { autoCommit: true, auditUserId: req.user.USERID });
+        await db.execute(
+            `UPDATE InsuranceType SET ${updates.join(', ')} WHERE InsuranceTypeID = :id`,
+            binds,
+            { autoCommit: true, auditUserId: req.user.USERID }
+        );
+        /*
+         * UPDATE InsuranceType ... – оновлюємо тільки ті поля, що були передані.
+         * WHERE InsuranceTypeID = :id – працюємо з конкретним типом страхування.
+         */
 
         const updated = await db.execute(
             `SELECT InsuranceTypeID, Name, Description, BaseRate, PayoutCoeff, AgentPercentDefault
              FROM InsuranceType WHERE InsuranceTypeID = :id`,
             { id: parseInt(id) }
         );
+        /*
+         * SELECT ... – повертаємо актуальні дані типу страхування після оновлення.
+         */
 
         if (updated.rows.length === 0) {
             return res.status(404).json({
@@ -160,6 +200,10 @@ const remove = async (req, res, next) => {
             { id: parseInt(id) },
             { autoCommit: true, auditUserId: req.user.USERID }
         );
+        /*
+         * DELETE FROM InsuranceType ... – видаляємо тип страхування.
+         * WHERE InsuranceTypeID = :id – обмежуємося конкретним записом.
+         */
 
         if (result.rowsAffected === 0) {
             return res.status(404).json({

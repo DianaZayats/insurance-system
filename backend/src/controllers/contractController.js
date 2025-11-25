@@ -11,29 +11,42 @@ const getAll = async (req, res, next) => {
         const from = req.query.from;
         const to = req.query.to;
 
-        let sql = `SELECT ContractID, ClientID, AgentID, InsuranceTypeID, StartDate, EndDate,
-                          InsuranceAmount, ContributionAmount, AgentPercent, Status
-                   FROM Contract WHERE 1=1`;
+        let sql = `
+            SELECT ContractID, ClientID, AgentID, InsuranceTypeID, StartDate, EndDate,
+                   InsuranceAmount, ContributionAmount, AgentPercent, Status
+            FROM Contract
+            WHERE 1=1
+        `;
+        /*
+         * SELECT ... – забираємо всі ключові реквізити договору (дати, суми, ставки, статус).
+         * FROM Contract – беремо дані з таблиці договорів.
+         * WHERE 1=1 – технічний вираз для гнучкого додавання подальших умов.
+         */
         const binds = {};
 
         if (clientId) {
             sql += ` AND ClientID = :clientId`;
+            // AND ClientID ... – залишаємо договори конкретного клієнта
             binds.clientId = parseInt(clientId);
         }
         if (agentId) {
             sql += ` AND AgentID = :agentId`;
+            // AND AgentID ... – фільтруємо за агентом
             binds.agentId = parseInt(agentId);
         }
         if (status) {
             sql += ` AND Status = :status`;
+            // AND Status ... – беремо договори з певним статусом
             binds.status = status;
         }
         if (from) {
             sql += ` AND StartDate >= TO_DATE(:from, 'YYYY-MM-DD')`;
+            // AND StartDate >= ... – обмежуємо нижньою датою початку
             binds.from = from;
         }
         if (to) {
             sql += ` AND EndDate <= TO_DATE(:to, 'YYYY-MM-DD')`;
+            // AND EndDate <= ... – обмежуємо верхньою датою завершення
             binds.to = to;
         }
 
@@ -46,8 +59,13 @@ const getAll = async (req, res, next) => {
                 `SELECT ClientID FROM Client WHERE Email = :email`,
                 { email: req.user.EMAIL }
             );
+            /*
+             * SELECT ClientID ... – визначаємо, якому клієнту належить email авторизованого користувача,
+             * щоб обмежити видачу тільки його договорами.
+             */
             if (clientResult.rows.length > 0) {
                 sql += ` AND ClientID = :userClientId`;
+                // AND ClientID ... – клієнт бачить лише власні договори
                 binds.userClientId = clientResult.rows[0].CLIENTID;
             } else {
                 return res.json({ data: [], pagination: { page, limit, total: 0, totalPages: 0 } });
@@ -55,17 +73,30 @@ const getAll = async (req, res, next) => {
         }
 
         sql += ` ORDER BY ContractID DESC OFFSET :offset ROWS FETCH NEXT :limit ROWS ONLY`;
+        /*
+         * ORDER BY ContractID DESC – показуємо найновіші договори першими.
+         * OFFSET ... / FETCH ... – реалізація пагінації.
+         */
 
         const result = await db.execute(sql, { ...binds, offset, limit });
 
-        let countSql = `SELECT COUNT(*) as TOTAL FROM Contract WHERE 1=1`;
-        if (clientId) countSql += ` AND ClientID = :clientId`;
-        if (agentId) countSql += ` AND AgentID = :agentId`;
-        if (status) countSql += ` AND Status = :status`;
-        if (from) countSql += ` AND StartDate >= TO_DATE(:from, 'YYYY-MM-DD')`;
-        if (to) countSql += ` AND EndDate <= TO_DATE(:to, 'YYYY-MM-DD')`;
-        if (req.user.ROLE === 'Agent') countSql += ` AND AgentID = :userAgentId`;
-        if (req.user.ROLE === 'Client' && binds.userClientId) countSql += ` AND ClientID = :userClientId`;
+        let countSql = `
+            SELECT COUNT(*) as TOTAL
+            FROM Contract
+            WHERE 1=1
+        `;
+        /*
+         * SELECT COUNT(*) ... – підраховуємо кількість договорів для побудови пагінації.
+         * FROM Contract – використовуємо ту саму таблицю, що й у основному запиті.
+         * WHERE 1=1 – база для додавання тих самих фільтрів, що й вище.
+         */
+        if (clientId) countSql += ` AND ClientID = :clientId`; // обмежуємо підрахунок клієнтом
+        if (agentId) countSql += ` AND AgentID = :agentId`; // рахуємо тільки договори агента
+        if (status) countSql += ` AND Status = :status`; // враховуємо лише вибраний статус
+        if (from) countSql += ` AND StartDate >= TO_DATE(:from, 'YYYY-MM-DD')`; // нижня межа дати старту
+        if (to) countSql += ` AND EndDate <= TO_DATE(:to, 'YYYY-MM-DD')`; // верхня межа дати завершення
+        if (req.user.ROLE === 'Agent') countSql += ` AND AgentID = :userAgentId`; // агент бачить тільки свої договори
+        if (req.user.ROLE === 'Client' && binds.userClientId) countSql += ` AND ClientID = :userClientId`; // клієнт – тільки свої
 
         const countResult = await db.execute(countSql, binds);
         const total = countResult.rows[0].TOTAL;
@@ -93,21 +124,33 @@ const getAll = async (req, res, next) => {
 const getById = async (req, res, next) => {
     try {
         const { id } = req.params;
-        let sql = `SELECT ContractID, ClientID, AgentID, InsuranceTypeID, StartDate, EndDate,
-                          InsuranceAmount, ContributionAmount, AgentPercent, Status
-                   FROM Contract WHERE ContractID = :id`;
+        let sql = `
+            SELECT ContractID, ClientID, AgentID, InsuranceTypeID, StartDate, EndDate,
+                   InsuranceAmount, ContributionAmount, AgentPercent, Status
+            FROM Contract
+            WHERE ContractID = :id
+        `;
+        /*
+         * SELECT ... – підтягуємо повну інформацію про конкретний договір.
+         * WHERE ContractID = :id – шукаємо запис за переданим ідентифікатором.
+         */
         const binds = { id: parseInt(id) };
 
         if (req.user.ROLE === 'Agent') {
             sql += ` AND AgentID = :agentId`;
+            // AND AgentID ... – агент може читати тільки свої договори
             binds.agentId = req.user.AGENTID;
         } else if (req.user.ROLE === 'Client') {
             const clientResult = await db.execute(
                 `SELECT ClientID FROM Client WHERE Email = :email`,
                 { email: req.user.EMAIL }
             );
+            /*
+             * SELECT ClientID ... – визначаємо клієнта за email, щоб обмежити доступ.
+             */
             if (clientResult.rows.length > 0) {
                 sql += ` AND ClientID = :clientId`;
+                // AND ClientID ... – клієнт отримує лише власний договір
                 binds.clientId = clientResult.rows[0].CLIENTID;
             }
         }
@@ -167,6 +210,11 @@ const create = async (req, res, next) => {
             },
             { autoCommit: true, auditUserId: req.user.USERID }
         );
+        /*
+         * INSERT INTO Contract ... – створюємо новий договір.
+         * seq_contract_id.NEXTVAL – генеруємо унікальний ContractID.
+         * TO_DATE(...) – коректно зберігаємо дати початку та завершення.
+         */
 
         // Отримуємо створений договір (разом з обчисленими полями)
         const newContract = await db.execute(
@@ -174,6 +222,10 @@ const create = async (req, res, next) => {
                     InsuranceAmount, ContributionAmount, AgentPercent, Status
              FROM Contract WHERE ContractID = (SELECT MAX(ContractID) FROM Contract)`
         );
+        /*
+         * SELECT ... WHERE ContractID = (SELECT MAX...) – підтягуємо щойно створений запис,
+         * щоб одразу повернути його клієнту (припускаючи, що має найбільший ID).
+         */
 
         res.status(201).json({
             contractId: newContract.rows[0].CONTRACTID,
@@ -214,7 +266,15 @@ const update = async (req, res, next) => {
             });
         }
 
-        await db.execute(`UPDATE Contract SET ${updates.join(', ')} WHERE ContractID = :id`, binds, { autoCommit: true, auditUserId: req.user.USERID });
+        await db.execute(
+            `UPDATE Contract SET ${updates.join(', ')} WHERE ContractID = :id`,
+            binds,
+            { autoCommit: true, auditUserId: req.user.USERID }
+        );
+        /*
+         * UPDATE Contract ... – змінюємо лише ті поля, які прийшли в запиті.
+         * WHERE ContractID = :id – працюємо з конкретним договором.
+         */
 
         const updated = await db.execute(
             `SELECT ContractID, ClientID, AgentID, InsuranceTypeID, StartDate, EndDate,
@@ -222,6 +282,9 @@ const update = async (req, res, next) => {
              FROM Contract WHERE ContractID = :id`,
             { id: parseInt(id) }
         );
+        /*
+         * SELECT ... – повертаємо оновлену версію договору, щоб клієнт побачив актуальні дані.
+         */
 
         if (updated.rows.length === 0) {
             return res.status(404).json({
@@ -257,6 +320,10 @@ const updateStatus = async (req, res, next) => {
             { status, id: parseInt(id) },
             { autoCommit: true, auditUserId: req.user.USERID }
         );
+        /*
+         * UPDATE Contract SET Status ... – змінюємо лише статус договору.
+         * WHERE ContractID = :id – застосовуємо до конкретного договору.
+         */
 
         if (result.rowsAffected === 0) {
             return res.status(404).json({
@@ -268,6 +335,9 @@ const updateStatus = async (req, res, next) => {
             `SELECT ContractID, Status FROM Contract WHERE ContractID = :id`,
             { id: parseInt(id) }
         );
+        /*
+         * SELECT ContractID, Status ... – повертаємо коротку відповідь із новим статусом.
+         */
 
         res.json({
             contractId: updated.rows[0].CONTRACTID,
@@ -286,6 +356,10 @@ const remove = async (req, res, next) => {
             { id: parseInt(id) },
             { autoCommit: true, auditUserId: req.user.USERID }
         );
+        /*
+         * DELETE FROM Contract ... – видаляємо договір із бази.
+         * WHERE ContractID = :id – працюємо з конкретним записом.
+         */
 
         if (result.rowsAffected === 0) {
             return res.status(404).json({

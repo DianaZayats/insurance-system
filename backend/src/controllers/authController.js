@@ -12,9 +12,15 @@ const register = async (req, res, next) => {
 
         // Перевіряємо, чи існує користувач
         const existing = await db.execute(
-            `SELECT UserID FROM Users WHERE Email = :email`,
+            `SELECT UserID
+             FROM Users
+             WHERE Email = :email`,
             { email }
         );
+        /*
+         * SELECT UserID ... – перевіряємо, чи існує користувач з таким email,
+         * щоб не створити дублікат.
+         */
 
         if (existing.rows.length > 0) {
             return res.status(400).json({
@@ -41,12 +47,22 @@ const register = async (req, res, next) => {
             },
             { autoCommit: true }
         );
+        /*
+         * INSERT INTO Users ... – створюємо нового користувача.
+         * seq_user_id.NEXTVAL – генеруємо унікальний UserID.
+         */
 
         // Отримуємо ідентифікатор створеного користувача
         const userIdResult = await db.execute(
-            `SELECT UserID FROM Users WHERE Email = :email`,
+            `SELECT UserID
+             FROM Users
+             WHERE Email = :email`,
             { email }
         );
+        /*
+         * SELECT UserID ... – визначаємо ідентифікатор щойно створеного користувача
+         * для формування JWT.
+         */
 
         const userId = userIdResult.rows[0].USERID;
 
@@ -75,9 +91,15 @@ const login = async (req, res, next) => {
 
         // Шукаємо користувача
         const result = await db.execute(
-            `SELECT UserID, Email, PasswordHash, Role, AgentID FROM Users WHERE Email = :email`,
+            `SELECT UserID, Email, PasswordHash, Role, AgentID
+             FROM Users
+             WHERE Email = :email`,
             { email }
         );
+        /*
+         * SELECT ... FROM Users WHERE Email = :email – шукаємо користувача за email
+         * щоб перевірити існування та зчитати хеш пароля.
+         */
 
         if (result.rows.length === 0) {
             return res.status(401).json({
@@ -126,9 +148,15 @@ const login = async (req, res, next) => {
 const getMe = async (req, res, next) => {
     try {
         const result = await db.execute(
-            `SELECT UserID, Email, Role, AgentID FROM Users WHERE UserID = :userId`,
+            `SELECT UserID, Email, Role, AgentID
+             FROM Users
+             WHERE UserID = :userId`,
             { userId: req.user.USERID }
         );
+        /*
+         * SELECT ... WHERE UserID = :userId – повертаємо базову інформацію
+         * про авторизованого користувача за його ID.
+         */
 
         if (result.rows.length === 0) {
             return res.status(404).json({
