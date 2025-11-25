@@ -55,7 +55,7 @@
       <button @click="changePage(1)" :disabled="pagination.page >= pagination.totalPages">Next</button>
     </div>
 
-    <!-- Add/Edit Modal -->
+    <!-- Модальне вікно для створення/редагування -->
     <div v-if="showModal" class="modal">
       <div class="modal-content">
         <h2>{{ editingContract ? 'Edit' : 'Add' }} Contract</h2>
@@ -167,7 +167,7 @@ export default {
   async mounted() {
     await this.fetchStatusOptions()
     await this.fetchContracts()
-    // Fetch all items for dropdowns (with high limit)
+    // Завантажуємо довідники для списків (з великим лімітом)
     await this.loadDropdownData()
   },
   methods: {
@@ -177,12 +177,12 @@ export default {
     ...mapActions('insuranceTypes', ['fetchInsuranceTypes']),
     async loadDropdownData() {
       try {
-        // Use limit 100 (max allowed by validation) and fetch first page
+        // Використовуємо ліміт 100 (максимум за валідацією) і беремо першу сторінку
         const clientsResponse = await this.fetchClients({ limit: 100, page: 1 })
         console.log('Clients loaded:', clientsResponse?.data?.length || 0, 'clients')
       } catch (error) {
         console.error('Error fetching clients:', error)
-        // Only show alert for critical errors, not validation errors
+        // Попереджаємо лише про критичні помилки, а не про помилки валідації
         if (error.error?.code !== 'VALIDATION') {
           alert('Failed to load clients: ' + (error.error?.message || 'Unknown error'))
         }
@@ -222,7 +222,7 @@ export default {
         startDate: contract.startDate?.split('T')[0],
         endDate: contract.endDate?.split('T')[0]
       }
-      // Ensure dropdowns are loaded before opening modal
+      // Перед відкриттям модального вікна переконуємось, що довідники вже завантажені
       if (this.clients.length === 0) {
         try {
           await this.fetchClients({ limit: 100, page: 1 })
@@ -252,7 +252,7 @@ export default {
           await this.updateContract({ id: this.editingContract.contractId, ...this.form })
         } else {
           await this.createContract(this.form)
-          // Reset to page 1 to show newly created contract
+          // Повертаємось на першу сторінку, щоб побачити новий договір
           this.$store.commit('contracts/SET_PAGINATION', { ...this.pagination, page: 1 })
         }
         this.closeModal()
@@ -276,7 +276,7 @@ export default {
       }
     },
     async openAddModal() {
-      // Ensure dropdowns are loaded before opening modal
+      // Перед відкриттям модального вікна переконуємось, що довідники вже завантажені
       if (this.clients.length === 0) {
         try {
           const response = await this.fetchClients({ limit: 100, page: 1 })
@@ -309,7 +309,7 @@ export default {
           }
         }
       }
-      // Debug: log current state
+      // Невелике логування для налагодження
       console.log('Opening modal - Clients:', this.clients.length, 'Agents:', this.agents.length, 'Types:', this.insuranceTypes.length)
       this.showModal = true
     },

@@ -5,8 +5,8 @@ const { authenticate, authorize } = require('../middleware/auth');
 
 /**
  * GET /audit-logs
- * Get all audit log entries with pagination and filtering
- * Admin only
+ * Отримати записи аудиту з пагінацією та фільтрами
+ * Доступно лише адміністратору
  */
 router.get('/',
     authenticate,
@@ -15,5 +15,6 @@ router.get('/',
 );
 
 module.exports = router;
+
 
 

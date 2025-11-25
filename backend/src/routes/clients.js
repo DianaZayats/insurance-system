@@ -5,12 +5,12 @@ const { authenticate, authorize, checkClientAccess } = require('../middleware/au
 const { clientRules, commonRules } = require('../utils/validation');
 const { handleValidationErrors } = require('../utils/validation');
 
-// All routes require authentication
+// Усі маршрути потребують автентифікації
 router.use(authenticate);
 
 /**
  * GET /clients
- * Get all clients
+ * Отримати всіх клієнтів
  */
 router.get('/',
     authorize('Admin', 'Agent', 'Client'),
@@ -21,7 +21,7 @@ router.get('/',
 
 /**
  * POST /clients
- * Create client
+ * Створити клієнта
  */
 router.post('/',
     authorize('Admin', 'Agent'),
@@ -32,7 +32,7 @@ router.post('/',
 
 /**
  * GET /clients/:id
- * Get client by ID
+ * Отримати клієнта за ідентифікатором
  */
 router.get('/:id',
     authorize('Admin', 'Agent', 'Client'),
@@ -44,7 +44,7 @@ router.get('/:id',
 
 /**
  * PUT /clients/:id
- * Update client
+ * Оновити клієнта
  */
 router.put('/:id',
     authorize('Admin', 'Agent'),
@@ -57,7 +57,7 @@ router.put('/:id',
 
 /**
  * DELETE /clients/:id
- * Delete client (Admin only)
+ * Видалити клієнта (лише адміністратор)
  */
 router.delete('/:id',
     authorize('Admin'),
@@ -68,7 +68,7 @@ router.delete('/:id',
 
 /**
  * GET /clients/:id/contracts
- * Get client contracts
+ * Отримати договори клієнта
  */
 router.get('/:id/contracts',
     authorize('Admin', 'Agent', 'Client'),

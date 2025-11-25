@@ -1,11 +1,11 @@
 const jwt = require('jsonwebtoken');
 const db = require('../config/database');
 
-// JWT secret from environment
+// Секрет JWT з середовища виконання
 const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-in-production';
 
 /**
- * Middleware to verify JWT token
+ * Мідлвар для перевірки JWT-токена
  */
 const authenticate = async (req, res, next) => {
     try {
@@ -24,7 +24,7 @@ const authenticate = async (req, res, next) => {
         const token = authHeader.substring(7);
         const decoded = jwt.verify(token, JWT_SECRET);
         
-        // Get user from database
+        // Отримуємо користувача з бази даних
         const result = await db.execute(
             `SELECT UserID, Email, Role, AgentID FROM Users WHERE UserID = :userId`,
             { userId: decoded.userId }
@@ -57,7 +57,7 @@ const authenticate = async (req, res, next) => {
 };
 
 /**
- * Role-based access control middleware
+ * Мідлвар для контролю доступу за ролями
  */
 const authorize = (...roles) => {
     return (req, res, next) => {
@@ -86,7 +86,8 @@ const authorize = (...roles) => {
 };
 
 /**
- * Check if user can access client data (Agent can only access their own clients)
+ * Перевіряє, чи може користувач отримати доступ до даних клієнта
+ * (агент бачить лише власних клієнтів)
  */
 const checkClientAccess = async (req, res, next) => {
     try {
@@ -95,7 +96,7 @@ const checkClientAccess = async (req, res, next) => {
         }
 
         if (req.user.ROLE === 'Client') {
-            // Client can only access their own data
+            // Клієнт може працювати лише зі своїми даними
             const clientId = parseInt(req.params.id || req.body.clientId || req.query.clientId);
             if (clientId) {
                 const result = await db.execute(
@@ -116,7 +117,7 @@ const checkClientAccess = async (req, res, next) => {
         }
 
         if (req.user.ROLE === 'Agent') {
-            // Agent can access clients from their contracts
+            // Агент працює тільки з клієнтами зі своїх договорів
             const clientId = parseInt(req.params.id || req.body.clientId || req.query.clientId);
             if (clientId) {
                 const result = await db.execute(

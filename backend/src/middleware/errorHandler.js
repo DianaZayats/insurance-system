@@ -1,10 +1,10 @@
 /**
- * Global error handler middleware
+ * Глобальний мідлвар для обробки помилок
  */
 const errorHandler = (err, req, res, next) => {
     console.error('Error:', err);
 
-    // Oracle database errors
+    // Помилки бази даних Oracle
     if (err.errorNum) {
         const oracleErrors = {
             1: 'Unique constraint violation',
@@ -28,7 +28,7 @@ const errorHandler = (err, req, res, next) => {
         });
     }
 
-    // Validation errors
+    // Помилки валідації
     if (err.name === 'ValidationError') {
         return res.status(400).json({
             error: {
@@ -39,7 +39,7 @@ const errorHandler = (err, req, res, next) => {
         });
     }
 
-    // JWT errors
+    // Помилки, пов’язані з JWT
     if (err.name === 'JsonWebTokenError' || err.name === 'TokenExpiredError') {
         return res.status(401).json({
             error: {
@@ -50,7 +50,7 @@ const errorHandler = (err, req, res, next) => {
         });
     }
 
-    // Default error
+    // Поведінка за замовчуванням
     res.status(err.status || 500).json({
         error: {
             code: err.code || 'INTERNAL_ERROR',

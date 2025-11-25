@@ -7,7 +7,7 @@ const { handleValidationErrors } = require('../utils/validation');
 
 /**
  * POST /auth/register
- * Register a new user (Admin only)
+ * Зареєструвати нового користувача (лише адміністратор)
  */
 router.post('/register',
     authenticate,
@@ -24,7 +24,7 @@ router.post('/register',
 
 /**
  * POST /auth/login
- * Login user
+ * Авторизувати користувача
  */
 router.post('/login',
     [
@@ -37,7 +37,7 @@ router.post('/login',
 
 /**
  * GET /auth/me
- * Get current user
+ * Отримати дані поточного користувача
  */
 router.get('/me',
     authenticate,

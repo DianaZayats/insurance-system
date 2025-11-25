@@ -44,7 +44,7 @@
       <button @click="changePage(1)" :disabled="pagination.page >= pagination.totalPages">Next</button>
     </div>
 
-    <!-- Modal for Add/Edit -->
+    <!-- Модальне вікно для створення/редагування -->
     <div v-if="showModal" class="modal">
       <div class="modal-content">
         <h2>{{ editingClient ? 'Edit' : 'Add' }} Client</h2>
@@ -128,7 +128,7 @@ export default {
           await this.updateClient({ id: this.editingClient.clientId, ...this.form })
         } else {
           await this.createClient(this.form)
-          // Reset to page 1 to show newly created client
+          // Повертаємось на першу сторінку, щоб побачити нового клієнта
           this.$store.commit('clients/SET_PAGINATION', { ...this.pagination, page: 1 })
         }
         this.closeModal()

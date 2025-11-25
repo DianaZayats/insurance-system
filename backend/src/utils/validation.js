@@ -1,7 +1,7 @@
 const { body, query, param, validationResult } = require('express-validator');
 
 /**
- * Handle validation errors
+ * Обробити помилки валідації
  */
 const handleValidationErrors = (req, res, next) => {
     const errors = validationResult(req);
@@ -18,7 +18,7 @@ const handleValidationErrors = (req, res, next) => {
 };
 
 /**
- * Common validation rules
+ * Загальні правила валідації
  */
 const commonRules = {
     pagination: [
@@ -31,7 +31,7 @@ const commonRules = {
 };
 
 /**
- * Client validation rules
+ * Правила валідації клієнтів
  */
 const clientRules = {
     create: [
@@ -43,7 +43,7 @@ const clientRules = {
         body('email').optional().trim().isEmail().withMessage('Invalid email format'),
         body().custom((value) => {
             if (!value.phone && !value.email) {
-                throw new Error('At least one of phone or email must be provided');
+                throw new Error('Потрібно вказати хоча б телефон або email');
             }
             return true;
         })
@@ -56,15 +56,15 @@ const clientRules = {
         body('phone').optional().trim().matches(/^\+?[\d\s-()]+$/),
         body('email').optional().trim().isEmail(),
         body().custom((value) => {
-            // If updating, at least one contact method should remain if both are being cleared
-            // This is handled at database level, but we can add validation here too
+            // Під час оновлення бажано залишити хоча б один спосіб зв’язку
+            // (правило також перевіряється на рівні БД)
             return true;
         })
     ]
 };
 
 /**
- * Contract validation rules
+ * Правила валідації договорів
  */
 const contractRules = {
     create: [
@@ -78,7 +78,7 @@ const contractRules = {
         body('status').optional().isIn(['Draft', 'Active', 'Suspended', 'Cancelled', 'Completed']),
         body().custom((value) => {
             if (new Date(value.endDate) <= new Date(value.startDate)) {
-                throw new Error('EndDate must be after StartDate');
+                throw new Error('EndDate має бути пізнішим за StartDate');
             }
             return true;
         })
@@ -96,7 +96,7 @@ const contractRules = {
 };
 
 /**
- * Insurance Case validation rules
+ * Правила валідації страхових випадків
  */
 const caseRules = {
     create: [

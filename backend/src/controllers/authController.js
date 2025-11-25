@@ -4,13 +4,13 @@ const db = require('../config/database');
 const { JWT_SECRET } = require('../middleware/auth');
 
 /**
- * Register a new user (Admin only)
+ * Зареєструвати нового користувача (лише для адміністратора)
  */
 const register = async (req, res, next) => {
     try {
         const { email, password, role, agentId } = req.body;
 
-        // Check if user exists
+        // Перевіряємо, чи існує користувач
         const existing = await db.execute(
             `SELECT UserID FROM Users WHERE Email = :email`,
             { email }
@@ -26,10 +26,10 @@ const register = async (req, res, next) => {
             });
         }
 
-        // Hash password
+        // Хешуємо пароль
         const passwordHash = await bcrypt.hash(password, 10);
 
-        // Insert user
+        // Додаємо користувача
         await db.execute(
             `INSERT INTO Users (UserID, Email, PasswordHash, Role, AgentID)
              VALUES (seq_user_id.NEXTVAL, :email, :passwordHash, :role, :agentId)`,
@@ -42,7 +42,7 @@ const register = async (req, res, next) => {
             { autoCommit: true }
         );
 
-        // Get the new user ID
+        // Отримуємо ідентифікатор створеного користувача
         const userIdResult = await db.execute(
             `SELECT UserID FROM Users WHERE Email = :email`,
             { email }
@@ -50,7 +50,7 @@ const register = async (req, res, next) => {
 
         const userId = userIdResult.rows[0].USERID;
 
-        // Generate token
+        // Генеруємо токен
         const token = jwt.sign({ userId }, JWT_SECRET, { expiresIn: '24h' });
 
         res.status(201).json({
@@ -67,13 +67,13 @@ const register = async (req, res, next) => {
 };
 
 /**
- * Login user
+ * Авторизація користувача
  */
 const login = async (req, res, next) => {
     try {
         const { email, password } = req.body;
 
-        // Find user
+        // Шукаємо користувача
         const result = await db.execute(
             `SELECT UserID, Email, PasswordHash, Role, AgentID FROM Users WHERE Email = :email`,
             { email }
@@ -91,7 +91,7 @@ const login = async (req, res, next) => {
 
         const user = result.rows[0];
 
-        // Verify password
+        // Перевіряємо пароль
         const valid = await bcrypt.compare(password, user.PASSWORDHASH);
         if (!valid) {
             return res.status(401).json({
@@ -103,7 +103,7 @@ const login = async (req, res, next) => {
             });
         }
 
-        // Generate token
+        // Генеруємо токен
         const token = jwt.sign({ userId: user.USERID }, JWT_SECRET, { expiresIn: '24h' });
 
         res.json({
@@ -121,7 +121,7 @@ const login = async (req, res, next) => {
 };
 
 /**
- * Get current user
+ * Отримати дані поточного користувача
  */
 const getMe = async (req, res, next) => {
     try {

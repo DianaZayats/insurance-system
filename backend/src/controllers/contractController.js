@@ -37,7 +37,7 @@ const getAll = async (req, res, next) => {
             binds.to = to;
         }
 
-        // Role-based filtering
+        // Розмежування доступу за ролями
         if (req.user.ROLE === 'Agent') {
             sql += ` AND AgentID = :userAgentId`;
             binds.userAgentId = req.user.AGENTID;
@@ -142,7 +142,7 @@ const create = async (req, res, next) => {
     try {
         const { clientId, agentId, insuranceTypeId, startDate, endDate, insuranceAmount, agentPercent, status } = req.body;
 
-        // Role-based validation
+        // Розмежування прав на створення за ролями
         if (req.user.ROLE === 'Agent' && agentId !== req.user.AGENTID) {
             return res.status(403).json({
                 error: { code: 'FORBIDDEN', message: 'Cannot create contract for another agent', details: {} }
@@ -168,7 +168,7 @@ const create = async (req, res, next) => {
             { autoCommit: true, auditUserId: req.user.USERID }
         );
 
-        // Get the created contract (with calculated fields)
+        // Отримуємо створений договір (разом з обчисленими полями)
         const newContract = await db.execute(
             `SELECT ContractID, ClientID, AgentID, InsuranceTypeID, StartDate, EndDate,
                     InsuranceAmount, ContributionAmount, AgentPercent, Status

@@ -29,7 +29,7 @@ const getAll = async (req, res, next) => {
             binds.to = to;
         }
 
-        // Role-based filtering
+        // Розмежування доступу за ролями
         if (req.user.ROLE === 'Agent') {
             sql += ` AND c.AgentID = :agentId`;
             binds.agentId = req.user.AGENTID;
@@ -131,7 +131,7 @@ const create = async (req, res, next) => {
     try {
         const { contractId, caseDate, actNumber, damageLevel, paymentDate } = req.body;
 
-        // Verify contract access
+        // Перевіряємо, чи має користувач доступ до договору
         if (req.user.ROLE === 'Agent') {
             const contractCheck = await db.execute(
                 `SELECT ContractID FROM Contract WHERE ContractID = :contractId AND AgentID = :agentId`,
@@ -158,7 +158,7 @@ const create = async (req, res, next) => {
             { autoCommit: true, auditUserId: req.user.USERID }
         );
 
-        // Get the created case (with calculated fields)
+        // Отримуємо створений випадок (разом з обчисленими полями)
         const newCase = await db.execute(
             `SELECT CaseID, ContractID, CaseDate, ActNumber, DamageLevel,
                     AccruedPayment, AccruedDate, PaymentDate

@@ -1,6 +1,6 @@
 const oracledb = require('oracledb');
 
-// Oracle database configuration
+// Налаштування підключення до бази даних Oracle
 const dbConfig = {
     user: process.env.DB_USER || 'INSURANCE_USER',
     password: process.env.DB_PASSWORD || 'Insurance123',
@@ -11,12 +11,12 @@ const dbConfig = {
     poolTimeout: 60
 };
 
-// Initialize connection pool
+// Ініціалізуємо пул з’єднань
 let pool;
 
 async function initialize() {
     try {
-        // Set Oracle client directory if needed (for Docker)
+        // Вказуємо директорію клієнта Oracle за потреби (наприклад, у Docker)
         if (process.env.ORACLE_CLIENT_LIB_DIR) {
             oracledb.initOracleClient({ libDir: process.env.ORACLE_CLIENT_LIB_DIR });
         }
@@ -41,8 +41,8 @@ async function close() {
 }
 
 /**
- * Set the current user ID for audit logging
- * This should be called before any INSERT/UPDATE/DELETE operations
+ * Встановити поточного користувача для аудиту
+ * Викликається перед будь-якими операціями INSERT/UPDATE/DELETE
  */
 async function setAuditUser(userId) {
     if (!userId) return;
@@ -54,7 +54,7 @@ async function setAuditUser(userId) {
         );
     } catch (err) {
         console.error('Error setting audit user:', err);
-        // Don't throw - audit context is optional
+        // Помилку не кидаємо — контекст аудиту не є обов’язковим
     }
 }
 
@@ -63,30 +63,30 @@ async function execute(query, binds = {}, options = {}) {
     try {
         connection = await pool.getConnection();
         
-        // Set audit user if provided in options
-        // This must be done in the same session before the DML operation
-        // Clear any stale audit context first, then set the new one
+        // Якщо вказано auditUserId — встановлюємо користувача аудиту
+        // Це потрібно робити в межах однієї сесії перед DML
+        // Спершу очищуємо попередній контекст, потім задаємо новий
         if (options.auditUserId) {
             try {
-                // Clear any existing audit context first (set to NULL)
+                // Спершу обнуляємо наявний контекст аудиту
                 await connection.execute(
                     'BEGIN AuditContext.SetUserID(NULL); END;',
                     {},
                     { autoCommit: false }
                 );
-                // Set the audit context in the same session
+                // Далі встановлюємо новий контекст у тій же сесії
                 await connection.execute(
                     'BEGIN AuditContext.SetUserID(:userId); END;',
                     { userId: options.auditUserId },
                     { autoCommit: false }
                 );
             } catch (err) {
-                // Log the error but don't fail the operation
+                // Логуємо помилку, але не зупиняємо основну операцію
                 console.error('Error setting audit user context:', err);
-                console.warn('Warning: Audit logging may not work for this operation');
+                console.warn('Попередження: аудит може некоректно відпрацювати для цієї операції');
             }
         } else {
-            // Clear audit context if no user ID provided
+            // Якщо користувача не передано — очищуємо контекст аудиту
             try {
                 await connection.execute(
                     'BEGIN AuditContext.SetUserID(NULL); END;',
@@ -94,12 +94,12 @@ async function execute(query, binds = {}, options = {}) {
                     { autoCommit: false }
                 );
             } catch (err) {
-                // Ignore errors when clearing
+                // Ігноруємо помилки під час очищення
             }
         }
         
-        // Execute the main query in the same session
-        // The audit context package variable will be available to triggers
+        // Виконуємо основний запит у тій же сесії
+        // Змінна пакету AuditContext буде доступна тригерам
         const result = await connection.execute(query, binds, {
             outFormat: oracledb.OUT_FORMAT_OBJECT,
             autoCommit: options.autoCommit !== false,

@@ -21,7 +21,7 @@ router.use('/cases', caseRoutes);
 router.use('/reports', reportRoutes);
 router.use('/audit-logs', auditRoutes);
 
-// Status options endpoint
+// Ендпоінт з переліком можливих статусів
 router.get('/status-options', (req, res) => {
     res.json(['Draft', 'Active', 'Suspended', 'Cancelled', 'Completed']);
 });

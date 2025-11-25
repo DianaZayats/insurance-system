@@ -1,7 +1,7 @@
 const db = require('../config/database');
 
 /**
- * Report 1: Find the month with the highest total insurance contributions
+ * Звіт 1: знайти місяць з максимальною сумою страхових внесків
  */
 const maxContributionMonth = async (req, res, next) => {
     try {
@@ -29,11 +29,11 @@ const maxContributionMonth = async (req, res, next) => {
 };
 
 /**
- * Report 2: Calculate each agent's total income for the previous month
+ * Звіт 2: підрахунок доходу кожного агента за вказаний місяць
  */
 const agentIncome = async (req, res, next) => {
     try {
-        const month = req.query.month; // Format: YYYY-MM
+        const month = req.query.month; // Формат: YYYY-MM
         if (!month) {
             return res.status(400).json({
                 error: {
@@ -70,7 +70,7 @@ const agentIncome = async (req, res, next) => {
 };
 
 /**
- * Report 3: For each client, determine the most demanded insurance type
+ * Звіт 3: визначити для кожного клієнта найпопулярніший тип страхування
  */
 const mostDemandedTypePerClient = async (req, res, next) => {
     try {
@@ -107,7 +107,7 @@ const mostDemandedTypePerClient = async (req, res, next) => {
 };
 
 /**
- * Report 4: For a chosen client, list all contracts currently active
+ * Звіт 4: для вибраного клієнта показати всі активні договори
  */
 const activeContracts = async (req, res, next) => {
     try {
@@ -122,7 +122,7 @@ const activeContracts = async (req, res, next) => {
             });
         }
 
-        // Role-based access check
+        // Перевірка доступу відповідно до ролі
         if (req.user.ROLE === 'Client') {
             const clientCheck = await db.execute(
                 `SELECT ClientID FROM Client WHERE ClientID = :clientId AND Email = :email`,
@@ -182,11 +182,11 @@ const activeContracts = async (req, res, next) => {
 };
 
 /**
- * Report 5: Determine clients with the most insurance cases or with no cases
+ * Звіт 5: визначити клієнтів з найбільшою кількістю страхових випадків або без них
  */
 const caseExtremes = async (req, res, next) => {
     try {
-        const mode = req.query.mode || 'most'; // 'most' or 'zero'
+        const mode = req.query.mode || 'most'; // значення «most» або «zero»
 
         if (mode === 'most') {
             const result = await db.execute(
@@ -244,7 +244,7 @@ const caseExtremes = async (req, res, next) => {
 };
 
 /**
- * Report 6: Identify clients who have used all insurance types
+ * Звіт 6: знайти клієнтів, які скористались усіма типами страхування
  */
 const allTypesUsedClients = async (req, res, next) => {
     try {
@@ -278,7 +278,7 @@ const allTypesUsedClients = async (req, res, next) => {
 };
 
 /**
- * Export report as CSV
+ * Експорт будь-якого звіту у формат CSV
  */
 const exportCSV = async (req, res, next) => {
     try {
@@ -400,7 +400,7 @@ const exportCSV = async (req, res, next) => {
                 });
         }
 
-        // Generate CSV
+        // Формуємо CSV
         const csv = [headers.join(','), ...data.map(row => row.map(cell => `"${cell}"`).join(','))].join('\n');
         res.setHeader('Content-Type', 'text/csv');
         res.setHeader('Content-Disposition', `attachment; filename="${reportName}.csv"`);

@@ -1,7 +1,7 @@
 const db = require('../config/database');
 
 /**
- * Get all branches with pagination and search
+ * Отримати всі філії з пагінацією та пошуком
  */
 const getAll = async (req, res, next) => {
     try {
@@ -26,7 +26,7 @@ const getAll = async (req, res, next) => {
             limit
         });
 
-        // Get total count
+        // Отримати загальну кількість записів
         let countSql = `SELECT COUNT(*) as TOTAL FROM Branch WHERE 1=1`;
         if (query) {
             countSql += ` AND UPPER(Name) LIKE UPPER(:query)`;
@@ -52,7 +52,7 @@ const getAll = async (req, res, next) => {
 };
 
 /**
- * Get branch by ID
+ * Отримати філію за ідентифікатором
  */
 const getById = async (req, res, next) => {
     try {
@@ -84,7 +84,7 @@ const getById = async (req, res, next) => {
 };
 
 /**
- * Create branch
+ * Створити філію
  */
 const create = async (req, res, next) => {
     try {
@@ -98,7 +98,7 @@ const create = async (req, res, next) => {
             { autoCommit: true, auditUserId: req.user.USERID }
         );
 
-        // Get the created branch
+        // Отримати щойно створену філію
         const newBranch = await db.execute(
             `SELECT BranchID, Name FROM Branch WHERE Name = :name`,
             { name }
@@ -114,7 +114,7 @@ const create = async (req, res, next) => {
 };
 
 /**
- * Update branch
+ * Оновити інформацію про філію
  */
 const update = async (req, res, next) => {
     try {
@@ -152,7 +152,7 @@ const update = async (req, res, next) => {
 };
 
 /**
- * Delete branch
+ * Видалити філію
  */
 const remove = async (req, res, next) => {
     try {

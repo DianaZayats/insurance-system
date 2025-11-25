@@ -8,23 +8,23 @@ const routes = require('./routes');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Middleware
-app.use(cors({ origin: '*' })); // Allow all origins as specified
+// Мідлвари
+app.use(cors({ origin: '*' })); // Дозволяємо запити з будь-яких джерел
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Health check
+// Ендпоінт перевірки стану сервера
 app.get('/health', (req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-// API routes
+// Підключаємо основні маршрути API
 app.use('/api/v1', routes);
 
-// Error handling
+// Глобальна обробка помилок
 app.use(errorHandler);
 
-// 404 handler
+// Обробник 404
 app.use((req, res) => {
     res.status(404).json({
         error: {
@@ -35,7 +35,7 @@ app.use((req, res) => {
     });
 });
 
-// Initialize database and start server
+// Ініціалізуємо базу та запускаємо сервер
 async function start() {
     try {
         await db.initialize();
@@ -51,7 +51,7 @@ async function start() {
     }
 }
 
-// Graceful shutdown
+// Коректне завершення роботи
 process.on('SIGTERM', async () => {
     console.log('SIGTERM received, shutting down gracefully');
     await db.close();

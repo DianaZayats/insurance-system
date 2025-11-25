@@ -1,8 +1,8 @@
 const db = require('../config/database');
 
 /**
- * Get all audit log entries with pagination and filtering
- * Admin only
+ * Отримати записи аудиту з пагінацією та фільтрами
+ * Доступно лише адміністратору
  */
 const getAllAuditLogs = async (req, res, next) => {
     try {
@@ -10,16 +10,16 @@ const getAllAuditLogs = async (req, res, next) => {
         const limit = parseInt(req.query.limit) || 20;
         const offset = (page - 1) * limit;
 
-        // Get total count
+        // Отримати загальну кількість записів
         const countQuery = `SELECT COUNT(*) as TOTAL FROM Audit_Log`;
         const countResult = await db.execute(countQuery);
         const total = countResult.rows[0].TOTAL;
 
-        // Get paginated data
-        // Convert timestamp to Kyiv timezone (Europe/Kiev)
-        // ChangedAt is stored as TIMESTAMP (no timezone), so we assume it's in UTC
-        // and convert to Kyiv timezone
-        // Use DBMS_LOB.SUBSTR to convert CLOB to VARCHAR2 to avoid circular reference issues
+        // Отримати дані для вибраної сторінки
+        // Конвертуємо дату/час у часовий пояс Києва (Europe/Kiev)
+        // ChangedAt зберігається як TIMESTAMP без таймзони, припускаємо UTC
+        // і переводимо у київський час
+        // Використовуємо DBMS_LOB.SUBSTR, щоб перетворити CLOB у VARCHAR2
         const dataQuery = `
             SELECT 
                 LogID,
@@ -47,10 +47,10 @@ const getAllAuditLogs = async (req, res, next) => {
 
         const result = await db.execute(dataQuery, binds);
 
-        // Format response - Create plain objects to avoid circular references
-        // Extract primitive values only to ensure JSON serialization works
+        // Формуємо відповідь: створюємо звичайні об’єкти, щоб уникнути циклічних посилань
+        // Витягуємо лише примітивні значення для коректної JSON-серіалізації
         const auditLogs = result.rows.map(row => {
-            // Create a plain object with only primitive values
+            // Створюємо простий об’єкт лише з примітивами
             const log = {
                 logId: Number(row.LOGID),
                 entity: String(row.ENTITY || ''),
@@ -65,7 +65,7 @@ const getAllAuditLogs = async (req, res, next) => {
 
         const totalPages = Math.ceil(total / limit);
 
-        // Ensure pagination values are primitives
+        // Переконуємось, що в пагінації теж лише примітиви
         const response = {
             data: auditLogs,
             pagination: {

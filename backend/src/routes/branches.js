@@ -5,12 +5,12 @@ const { authenticate, authorize } = require('../middleware/auth');
 const { body } = require('express-validator');
 const { handleValidationErrors, commonRules } = require('../utils/validation');
 
-// All routes require authentication
+// Усі маршрути потребують автентифікації
 router.use(authenticate);
 
 /**
  * GET /branches
- * Get all branches
+ * Отримати всі філії
  */
 router.get('/',
     authorize('Admin', 'Agent'),
@@ -21,7 +21,7 @@ router.get('/',
 
 /**
  * POST /branches
- * Create branch (Admin only)
+ * Створити філію (лише адміністратор)
  */
 router.post('/',
     authorize('Admin'),
@@ -34,7 +34,7 @@ router.post('/',
 
 /**
  * GET /branches/:id
- * Get branch by ID
+ * Отримати філію за ідентифікатором
  */
 router.get('/:id',
     authorize('Admin', 'Agent'),
@@ -45,7 +45,7 @@ router.get('/:id',
 
 /**
  * PUT /branches/:id
- * Update branch (Admin only)
+ * Оновити філію (лише адміністратор)
  */
 router.put('/:id',
     authorize('Admin'),
@@ -59,7 +59,7 @@ router.put('/:id',
 
 /**
  * DELETE /branches/:id
- * Delete branch (Admin only)
+ * Видалити філію (лише адміністратор)
  */
 router.delete('/:id',
     authorize('Admin'),

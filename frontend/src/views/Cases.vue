@@ -40,7 +40,7 @@
       <button @click="changePage(1)" :disabled="pagination.page >= pagination.totalPages">Next</button>
     </div>
 
-    <!-- Add/Edit Modal -->
+    <!-- Модальне вікно для створення/редагування -->
     <div v-if="showModal" class="modal">
       <div class="modal-content">
         <h2>{{ editingCase ? 'Edit' : 'Add' }} Insurance Case</h2>
@@ -124,7 +124,7 @@ export default {
       })
     },
     async openAddModal() {
-      // Ensure contracts are loaded before opening modal
+      // Переконуємось, що договори завантажені перед відкриттям модального вікна
       if (this.contracts.length === 0) {
         try {
           await this.fetchContracts({ limit: 100, page: 1 })
@@ -144,7 +144,7 @@ export default {
         caseDate: caseItem.caseDate?.split('T')[0],
         paymentDate: caseItem.paymentDate?.split('T')[0] || ''
       }
-      // Ensure contracts are loaded before opening modal
+      // Переконуємось, що договори завантажені перед відкриттям модального вікна
       if (this.contracts.length === 0) {
         try {
           await this.fetchContracts({ limit: 100, page: 1 })
@@ -160,7 +160,7 @@ export default {
           await this.updateCase({ id: this.editingCase.caseId, ...this.form })
         } else {
           await this.createCase(this.form)
-          // Reset to page 1 to show newly created case
+          // Повертаємось на першу сторінку, щоб побачити щойно створений випадок
           this.$store.commit('cases/SET_PAGINATION', { ...this.pagination, page: 1 })
         }
         this.closeModal()

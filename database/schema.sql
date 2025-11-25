@@ -132,21 +132,21 @@ CREATE TABLE Audit_Log (
 );
 
 -- Індекси для зовнішніх ключів та часто використовуваних полів
--- Contract table indexes
+-- Індекси таблиці Contract
 CREATE INDEX idx_contract_clientid ON Contract(ClientID);
 CREATE INDEX idx_contract_agentid ON Contract(AgentID);
 CREATE INDEX idx_contract_insurancetypeid ON Contract(InsuranceTypeID);
 CREATE INDEX idx_contract_status ON Contract(Status);
 CREATE INDEX idx_contract_dates ON Contract(StartDate, EndDate);
 
--- InsuranceCase table indexes
+-- Індекси таблиці InsuranceCase
 CREATE INDEX idx_case_contractid ON InsuranceCase(ContractID);
 CREATE INDEX idx_case_date ON InsuranceCase(CaseDate);
 
--- Agent table indexes
+-- Індекси таблиці Agent
 CREATE INDEX idx_agent_branchid ON Agent(BranchID);
 
--- Audit_Log table indexes
+-- Індекси таблиці Audit_Log
 CREATE INDEX idx_audit_entity ON Audit_Log(Entity, EntityID);
 CREATE INDEX idx_audit_changedby ON Audit_Log(ChangedBy);
 CREATE INDEX idx_audit_changed_at ON Audit_Log(ChangedAt);
@@ -339,7 +339,7 @@ CREATE OR REPLACE TRIGGER trg_recalculate_contribution_after_uplift
 AFTER INSERT OR UPDATE OF InsuranceAmount, InsuranceTypeID ON Contract
 FOR EACH ROW
 BEGIN
-    -- Contribution перераховує інший тригер
+    -- Перерахунок внеску виконує інший тригер
     NULL;
 END;
 /

@@ -30,7 +30,7 @@
       </tbody>
     </table>
 
-    <!-- Modal for Add/Edit -->
+    <!-- Модальне вікно для створення/редагування -->
     <div v-if="showModal" class="modal">
       <div class="modal-content">
         <h2>{{ editingType ? 'Edit' : 'Add' }} Insurance Type</h2>

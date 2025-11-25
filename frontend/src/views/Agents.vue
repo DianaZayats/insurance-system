@@ -49,7 +49,7 @@
       </tbody>
     </table>
 
-    <!-- Modal for Add/Edit -->
+    <!-- Модальне вікно для створення/редагування -->
     <div v-if="showModal" class="modal">
       <div class="modal-content">
         <h2>{{ editingAgent ? 'Edit' : 'Add' }} Agent</h2>
@@ -115,7 +115,7 @@ export default {
       return this.$store.state.agents.pagination
     },
     canEditAgents() {
-      // Only Admin can edit/delete agents
+      // Лише адміністратор може створювати, редагувати та видаляти агентів
       return this.userRole === 'Admin'
     }
   },
@@ -146,7 +146,7 @@ export default {
           })
         } else {
           await this.createAgent(this.form)
-          // Reset to page 1 to show newly created agent
+          // Повертаємось на першу сторінку, щоб побачити нового агента
           this.$store.commit('agents/SET_PAGINATION', { ...this.pagination, page: 1 })
         }
         this.closeModal()
@@ -181,10 +181,10 @@ export default {
       return new Date(date).toLocaleDateString()
     },
     isSystemAccount(agent) {
-      // Check if this is a system account with login "agent" or "client"
+      // Перевіряємо, чи це системний обліковий запис із логіном «agent» або «client»
       if (!agent.userEmail) return false
       const email = agent.userEmail.toLowerCase()
-      // Check if email is exactly "agent" or "client", or starts with "agent@" or "client@"
+      // Email може бути точним збігом «agent»/«client» або починатися з «agent@»/«client@»
       return email === 'agent' || email === 'client' || 
              email.startsWith('agent@') || email.startsWith('client@')
     }

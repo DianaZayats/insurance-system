@@ -1,7 +1,7 @@
 const db = require('../config/database');
 
 /**
- * Get all clients with pagination and filters
+ * Отримати всіх клієнтів з пагінацією та фільтрами
  */
 const getAll = async (req, res, next) => {
     try {
@@ -28,7 +28,7 @@ const getAll = async (req, res, next) => {
             binds.email = `%${email}%`;
         }
 
-        // Role-based filtering
+        // Розмежування доступу за ролями
         if (req.user.ROLE === 'Agent') {
             sql += ` AND ClientID IN (SELECT DISTINCT ClientID FROM Contract WHERE AgentID = :agentId)`;
             binds.agentId = req.user.AGENTID;
@@ -45,7 +45,7 @@ const getAll = async (req, res, next) => {
             limit
         });
 
-        // Get total count
+        // Отримати загальну кількість записів
         let countSql = `SELECT COUNT(*) as TOTAL FROM Client WHERE 1=1`;
         if (name) countSql += ` AND (UPPER(LastName) LIKE UPPER(:name) OR UPPER(FirstName) LIKE UPPER(:name))`;
         if (phone) countSql += ` AND Phone LIKE :phone`;
@@ -82,7 +82,7 @@ const getAll = async (req, res, next) => {
 };
 
 /**
- * Get client by ID
+ * Отримати клієнта за ідентифікатором
  */
 const getById = async (req, res, next) => {
     try {
@@ -91,7 +91,7 @@ const getById = async (req, res, next) => {
         let sql = `SELECT ClientID, LastName, FirstName, MiddleName, Address, Phone, Email FROM Client WHERE ClientID = :id`;
         const binds = { id: parseInt(id) };
 
-        // Role-based access
+        // Розмежування доступу за ролями
         if (req.user.ROLE === 'Agent') {
             sql += ` AND ClientID IN (SELECT DISTINCT ClientID FROM Contract WHERE AgentID = :agentId)`;
             binds.agentId = req.user.AGENTID;
@@ -128,7 +128,7 @@ const getById = async (req, res, next) => {
 };
 
 /**
- * Create client
+ * Створити клієнта
  */
 const create = async (req, res, next) => {
     try {
@@ -148,7 +148,7 @@ const create = async (req, res, next) => {
             { autoCommit: true, auditUserId: req.user.USERID }
         );
 
-        // Get the created client
+        // Отримати щойно створеного клієнта
         const newClient = await db.execute(
             `SELECT ClientID, LastName, FirstName, MiddleName, Address, Phone, Email 
              FROM Client WHERE LastName = :lastName AND FirstName = :firstName 
@@ -171,14 +171,14 @@ const create = async (req, res, next) => {
 };
 
 /**
- * Update client
+ * Оновити дані клієнта
  */
 const update = async (req, res, next) => {
     try {
         const { id } = req.params;
         const { lastName, firstName, middleName, address, phone, email } = req.body;
 
-        // Build dynamic update query
+        // Побудувати динамічний SQL для оновлення
         const updates = [];
         const binds = { id: parseInt(id) };
 
@@ -250,7 +250,7 @@ const update = async (req, res, next) => {
 };
 
 /**
- * Delete client
+ * Видалити клієнта
  */
 const remove = async (req, res, next) => {
     try {
@@ -279,7 +279,7 @@ const remove = async (req, res, next) => {
 };
 
 /**
- * Get client contracts
+ * Отримати договори клієнта
  */
 const getContracts = async (req, res, next) => {
     try {
@@ -296,7 +296,7 @@ const getContracts = async (req, res, next) => {
                    WHERE c.ClientID = :clientId`;
         const binds = { clientId: parseInt(id) };
 
-        // Role-based access
+        // Розмежування доступу за ролями
         if (req.user.ROLE === 'Client') {
             const clientCheck = await db.execute(
                 `SELECT ClientID FROM Client WHERE ClientID = :id AND Email = :email`,
@@ -328,7 +328,7 @@ const getContracts = async (req, res, next) => {
             limit
         });
 
-        // Get total count
+        // Отримати загальну кількість записів
         let countSql = `SELECT COUNT(*) as TOTAL FROM Contract WHERE ClientID = :clientId`;
         if (req.user.ROLE === 'Agent') {
             countSql += ` AND AgentID = :agentId`;
